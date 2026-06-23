@@ -1,0 +1,31 @@
+# =============================================================================
+# profiles.yml — dbt connection profile for PrintTimeUSA Data Warehouse
+#
+# Credentials are read from environment variables injected by Docker Compose.
+# Never hardcode passwords here.
+# =============================================================================
+
+printtime_dw:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host:     "{{ env_var('DBT_HOST', 'postgres') }}"
+      port:     "{{ env_var('DBT_PORT', '5432') | int }}"
+      database: "{{ env_var('DBT_DATABASE', 'printtime_dw') }}"
+      schema:   "{{ env_var('DBT_SCHEMA', 'silver') }}"
+      user:     "{{ env_var('DBT_USER') }}"
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      threads:  4
+      keepalives_idle: 0
+
+    prod:
+      type: postgres
+      host:     "{{ env_var('DBT_HOST') }}"
+      port:     "{{ env_var('DBT_PORT', '5432') | int }}"
+      database: "{{ env_var('DBT_DATABASE') }}"
+      schema:   "{{ env_var('DBT_SCHEMA', 'silver') }}"
+      user:     "{{ env_var('DBT_USER') }}"
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      threads:  8
+      keepalives_idle: 0

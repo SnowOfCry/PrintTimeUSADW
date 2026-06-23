@@ -1,0 +1,60 @@
+version: 2
+
+# =============================================================================
+# _silver_models.yml
+# Documents and tests dbt silver-layer models.
+# Silver models clean, standardize, and deduplicate bronze source data.
+# Add one model block per .sql file you create in this folder.
+# =============================================================================
+
+models:
+
+  # ── Placeholder: replace with your real silver models ──────────────────────
+
+  - name: stg_orders
+    description: >
+      Staged orders from bronze.raw_orders. Applies data type casting,
+      column renaming, null handling, and deduplication. No business rules.
+    config:
+      materialized: table
+      schema: silver
+    columns:
+      - name: order_id
+        description: "Surrogate or natural key — unique, not null."
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "FK reference to stg_customers."
+        tests:
+          - not_null
+      - name: order_date
+        description: "Order creation date cast to DATE."
+        tests:
+          - not_null
+      # Add more columns as you define the real model
+
+  - name: stg_customers
+    description: >
+      Staged customers from bronze.raw_customers. Standardizes names,
+      trims whitespace, and resolves duplicate customer records.
+    config:
+      materialized: table
+      schema: silver
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_products
+    description: >
+      Staged products from bronze.raw_products.
+    config:
+      materialized: table
+      schema: silver
+    columns:
+      - name: product_id
+        tests:
+          - unique
+          - not_null

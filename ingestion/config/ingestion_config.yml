@@ -1,0 +1,30 @@
+# =============================================================================
+# ingestion_config.yml
+# PrintTimeUSA ELT Ingestion Configuration
+# Sensitive values (passwords, hosts) should be set via environment variables.
+# =============================================================================
+
+# Logical name for this source system
+source_name: oltp_printtime
+
+# Default load strategy for tables that don't override it
+default_load_strategy: incremental
+
+# Default watermark column name (override per-table as needed)
+default_watermark_column: updated_at
+
+# Bronze schema where raw data is loaded
+target_schema: bronze
+
+# Tables to include in the ingestion run.
+# Uncomment and add your real OLTP tables here.
+# tables:
+#   - name: orders
+#     watermark_column: updated_at
+#     load_strategy: incremental
+#   - name: customers
+#     watermark_column: updated_at
+#     load_strategy: incremental
+#   - name: products
+#     watermark_column: updated_at
+#     load_strategy: full_load

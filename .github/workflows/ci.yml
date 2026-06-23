@@ -1,0 +1,91 @@
+name: CI — PrintTimeUSA ELT Data Warehouse
+
+on:
+  push:
+    branches: ["main", "develop", "feature/**"]
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+
+  # ── Lint & Type Check ────────────────────────────────────────────────────
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check ingestion/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check ingestion/ tests/
+
+      - name: Mypy type check
+        run: mypy ingestion/ --ignore-missing-imports
+
+  # ── Unit Tests ───────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v --cov=ingestion --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ── Docker Compose Validation ─────────────────────────────────────────────
+  docker-compose-validate:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy env example
+        run: cp .env.example .env
+
+      - name: Validate docker-compose.yml syntax
+        run: docker compose config --quiet
+
+  # ── SonarQube Scan (optional) ─────────────────────────────────────────────
+  # Uncomment this job and add SONAR_TOKEN as a GitHub Actions secret to enable.
+  #
+  # sonarqube:
+  #   name: SonarQube Scan
+  #   runs-on: ubuntu-latest
+  #   needs: unit-tests
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0       # Required for SonarQube blame data
+  #
+  #     - name: SonarQube Scan
+  #       uses: SonarSource/sonarqube-scan-action@v2
+  #       env:
+  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

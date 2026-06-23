@@ -1,0 +1,71 @@
+# =============================================================================
+# .gitignore — PrintTimeUSA ELT Data Warehouse
+# =============================================================================
+
+# --- Secrets / Environment ---
+.env
+*.env.local
+*.env.production
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+wheels/
+pip-wheel-metadata/
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+ENV/
+.python-version
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# --- Airflow ---
+airflow/logs/
+airflow/config/airflow.cfg        # generated at runtime
+
+# --- dbt ---
+dbt/printtime_dw/target/
+dbt/printtime_dw/dbt_packages/
+dbt/printtime_dw/logs/
+
+# --- Docker local volumes (if mapped to ./volumes/) ---
+volumes/
+
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- OS ---
+.DS_Store
+ehthumbs.db
+Desktop.ini
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Docs build ---
+docs/_build/
+site/

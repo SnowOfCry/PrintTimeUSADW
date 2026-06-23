@@ -1,0 +1,201 @@
+---
+# =============================================================================
+# docker-compose.yml — PrintTimeUSA ELT Data Warehouse Stack
+# All services share a single bridge network.
+# Copy .env.example to .env and fill in credentials before running.
+# =============================================================================
+
+x-airflow-common: &airflow-common
+  build:
+    context: ./docker/airflow
+    dockerfile: Dockerfile
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB_NAME}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-changeme_in_env}
+    AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+    # Forward warehouse connection to DAGs
+    DW_HOST: postgres
+    DW_PORT: "5432"
+    DW_DB: ${POSTGRES_DB}
+    DW_USER: ${POSTGRES_USER}
+    DW_PASSWORD: ${POSTGRES_PASSWORD}
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./airflow/config:/opt/airflow/config
+    - ./ingestion:/opt/airflow/ingestion      # Python ingestion layer available to DAGs
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - elt_network
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 — Data Warehouse database
+  # ---------------------------------------------------------------------------
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    container_name: printtime_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - elt_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # pgAdmin 4 — PostgreSQL GUI
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:8.9
+    container_name: printtime_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - elt_network
+
+  # ---------------------------------------------------------------------------
+  # Airflow — init service (runs once to bootstrap the metadata DB)
+  # ---------------------------------------------------------------------------
+  airflow-init:
+    <<: *airflow-common
+    container_name: printtime_airflow_init
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create
+          --username ${AIRFLOW_ADMIN_USER}
+          --password ${AIRFLOW_ADMIN_PASSWORD}
+          --firstname Admin
+          --lastname User
+          --role Admin
+          --email ${AIRFLOW_ADMIN_EMAIL}
+      "
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Airflow Webserver — UI at http://localhost:8080
+  # ---------------------------------------------------------------------------
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: printtime_airflow_webserver
+    restart: unless-stopped
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Airflow Scheduler — executes DAG tasks
+  # ---------------------------------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: printtime_airflow_scheduler
+    restart: unless-stopped
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # dbt — transformation layer (run ad-hoc or triggered from Airflow)
+  # ---------------------------------------------------------------------------
+  dbt:
+    build:
+      context: ./docker/dbt
+      dockerfile: Dockerfile
+    container_name: printtime_dbt
+    restart: "no"
+    environment:
+      DBT_HOST: postgres
+      DBT_PORT: "5432"
+      DBT_DATABASE: ${POSTGRES_DB}
+      DBT_USER: ${POSTGRES_USER}
+      DBT_PASSWORD: ${POSTGRES_PASSWORD}
+      DBT_SCHEMA: silver          # default target schema; overridden per model
+    volumes:
+      - ./dbt/printtime_dw:/dbt/printtime_dw
+    working_dir: /dbt/printtime_dw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - elt_network
+    # Override at runtime: docker compose run dbt dbt run --select silver
+    command: ["dbt", "debug"]
+
+  # ---------------------------------------------------------------------------
+  # SonarQube Community Edition — code quality analysis
+  # ---------------------------------------------------------------------------
+  sonarqube:
+    image: sonarqube:10.6-community
+    container_name: printtime_sonarqube
+    restart: unless-stopped
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SONAR_JDBC_USERNAME: ${POSTGRES_USER}
+      SONAR_JDBC_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - elt_network
+    # SonarQube requires this kernel setting on Linux hosts:
+    # sudo sysctl -w vm.max_map_count=524288
+
+# =============================================================================
+# Persistent Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+  pgadmin_data:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
+
+# =============================================================================
+# Shared Network
+# =============================================================================
+networks:
+  elt_network:
+    driver: bridge

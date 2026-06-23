@@ -1,0 +1,93 @@
+version: 2
+
+# =============================================================================
+# _gold_models.yml
+# Documents and tests dbt gold-layer models.
+# Gold models build star-schema dimensions and fact tables for analytics.
+# Add one model block per .sql file you create in this folder.
+# =============================================================================
+
+models:
+
+  # ── Placeholder: replace with your real gold models ────────────────────────
+
+  - name: dim_customers
+    description: >
+      Customer dimension table. Built from silver.stg_customers.
+      Assigns surrogate keys and adds conformed attributes for analytics.
+    config:
+      materialized: table
+      schema: gold
+    columns:
+      - name: customer_key
+        description: "Surrogate key (integer sequence)."
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: "Natural key from source system."
+        tests:
+          - not_null
+
+  - name: dim_products
+    description: >
+      Product dimension table. Built from silver.stg_products.
+    config:
+      materialized: table
+      schema: gold
+    columns:
+      - name: product_key
+        tests:
+          - unique
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+
+  - name: dim_date
+    description: >
+      Date dimension table. Populated from a seed or generated via dbt macro.
+      Provides calendar attributes (year, quarter, month, week, day_of_week).
+    config:
+      materialized: table
+      schema: gold
+    columns:
+      - name: date_key
+        description: "Integer date key in YYYYMMDD format."
+        tests:
+          - unique
+          - not_null
+      - name: full_date
+        description: "Calendar date (DATE type)."
+        tests:
+          - unique
+          - not_null
+
+  - name: fct_orders
+    description: >
+      Orders fact table. Grain = one row per order line item.
+      Joins silver.stg_orders with gold dimensions.
+    config:
+      materialized: table
+      schema: gold
+    columns:
+      - name: order_key
+        description: "Surrogate key."
+        tests:
+          - unique
+          - not_null
+      - name: customer_key
+        description: "FK to dim_customers."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_key
+      - name: product_key
+        description: "FK to dim_products."
+        tests:
+          - not_null
+      - name: order_date_key
+        description: "FK to dim_date."
+        tests:
+          - not_null

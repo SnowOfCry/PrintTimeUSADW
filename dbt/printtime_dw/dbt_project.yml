@@ -1,0 +1,59 @@
+name: 'printtime_dw'
+version: '1.0.0'
+config-version: 2
+
+# Profile to use (defined in profiles.yml)
+profile: 'printtime_dw'
+
+# Folder structure
+model-paths:   ["models"]
+analysis-paths: ["analyses"]
+test-paths:    ["tests"]
+seed-paths:    ["seeds"]
+macro-paths:   ["macros"]
+snapshot-paths: ["snapshots"]
+
+# Build artifacts
+target-path:   "target"
+clean-targets: ["target", "dbt_packages"]
+
+# =============================================================================
+# Model layer configuration
+# Each layer maps to a PostgreSQL schema and has sensible defaults.
+# =============================================================================
+
+models:
+  printtime_dw:
+
+    # ── Bronze ────────────────────────────────────────────────────────────────
+    # Bronze models are thin views/references over raw tables written by Python.
+    # They add no business logic — they may add dbt source freshness checks only.
+    bronze:
+      +schema: bronze
+      +materialized: view        # Stay close to raw; avoid duplicating storage
+      +tags: ["bronze"]
+
+    # ── Silver ────────────────────────────────────────────────────────────────
+    # Silver models clean, standardize, deduplicate, and conform raw data.
+    # They produce trusted, typed records ready for dimensional modelling.
+    silver:
+      +schema: silver
+      +materialized: table       # Persist so gold models query fast
+      +tags: ["silver"]
+
+    # ── Gold ──────────────────────────────────────────────────────────────────
+    # Gold models build star-schema dimensions and fact tables for analytics.
+    gold:
+      +schema: gold
+      +materialized: table
+      +tags: ["gold"]
+
+# Seeds (reference/lookup CSVs)
+seeds:
+  printtime_dw:
+    +schema: bronze              # Load seeds into bronze by default
+
+# Snapshots (SCD Type 2)
+snapshots:
+  printtime_dw:
+    +target_schema: silver

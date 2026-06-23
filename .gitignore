@@ -45,6 +45,7 @@ airflow/config/airflow.cfg        # generated at runtime
 dbt/printtime_dw/target/
 dbt/printtime_dw/dbt_packages/
 dbt/printtime_dw/logs/
+dbt/printtime_dw/.user.yml
 
 # --- Docker local volumes (if mapped to ./volumes/) ---
 volumes/

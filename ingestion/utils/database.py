@@ -85,26 +85,43 @@ def get_dw_psycopg2_conn() -> Generator[psycopg2.extensions.connection, None, No
 
 
 # ---------------------------------------------------------------------------
-# OLTP Source — placeholder; replace with real source credentials/driver
+# OLTP Source — PrintTimeUSA OLTP (PostgreSQL on the host machine)
+# From inside Docker, OLTP_HOST should be host.docker.internal to reach the
+# host's local PostgreSQL. All credentials come from environment variables.
 # ---------------------------------------------------------------------------
 
-def get_oltp_connection() -> None:
-    """
-    Return a connection to the OLTP source system.
+def get_oltp_connection_string() -> str:
+    """Build a PostgreSQL DSN for the OLTP source from environment variables."""
+    host     = os.environ["OLTP_HOST"]
+    port     = os.environ.get("OLTP_PORT", "5432")
+    database = os.environ["OLTP_DB"]
+    user     = os.environ["OLTP_USER"]
+    password = os.environ["OLTP_PASSWORD"]
+    return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 
-    Replace this stub with the correct driver and credentials for your
-    source database (PostgreSQL, MySQL, MSSQL, etc.).
+
+def get_oltp_engine() -> Engine:
+    """
+    Return a SQLAlchemy engine connected to the OLTP source.
+
+    Use this for pandas read_sql operations in the extractor.
+    """
+    dsn = get_oltp_connection_string()
+    engine = create_engine(dsn, pool_pre_ping=True, pool_size=2, max_overflow=4)
+    logger.debug("OLTP engine created | host=%s", os.environ.get("OLTP_HOST"))
+    return engine
+
+
+def get_oltp_connection() -> psycopg2.extensions.connection:
+    """
+    Return a raw psycopg2 connection to the OLTP source system (PostgreSQL).
+
     Read credentials ONLY from environment variables.
     """
-    # Example for a PostgreSQL OLTP source:
-    # import psycopg2
-    # return psycopg2.connect(
-    #     host=os.environ["OLTP_HOST"],
-    #     port=int(os.environ.get("OLTP_PORT", "5432")),
-    #     dbname=os.environ["OLTP_DB"],
-    #     user=os.environ["OLTP_USER"],
-    #     password=os.environ["OLTP_PASSWORD"],
-    # )
-    raise NotImplementedError(
-        "Wire in your OLTP source connection in database.get_oltp_connection()."
+    return psycopg2.connect(
+        host=os.environ["OLTP_HOST"],
+        port=int(os.environ.get("OLTP_PORT", "5432")),
+        dbname=os.environ["OLTP_DB"],
+        user=os.environ["OLTP_USER"],
+        password=os.environ["OLTP_PASSWORD"],
     )

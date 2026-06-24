@@ -22,6 +22,14 @@ x-airflow-common: &airflow-common
     DW_DB: ${POSTGRES_DB}
     DW_USER: ${POSTGRES_USER}
     DW_PASSWORD: ${POSTGRES_PASSWORD}
+    # Forward OLTP source connection to DAGs (host's local PostgreSQL)
+    OLTP_HOST: ${OLTP_HOST}
+    OLTP_PORT: ${OLTP_PORT}
+    OLTP_DB: ${OLTP_DB}
+    OLTP_USER: ${OLTP_USER}
+    OLTP_PASSWORD: ${OLTP_PASSWORD}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
@@ -50,7 +58,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:

@@ -17,14 +17,69 @@ default_watermark_column: updated_at
 target_schema: bronze
 
 # Tables to include in the ingestion run.
-# Uncomment and add your real OLTP tables here.
-# tables:
-#   - name: orders
-#     watermark_column: updated_at
-#     load_strategy: incremental
-#   - name: customers
-#     watermark_column: updated_at
-#     load_strategy: incremental
-#   - name: products
-#     watermark_column: updated_at
-#     load_strategy: full_load
+# Small reference/dimension tables are reloaded in full each run.
+# Large transactional tables load incrementally on updated_at.
+tables:
+  # --- Reference / lookup tables (small, full reload) ---
+  - name: ref_state
+    load_strategy: full_load
+  - name: ref_invoice_status
+    load_strategy: full_load
+  - name: ref_payment_status
+    load_strategy: full_load
+  - name: payment_method
+    load_strategy: full_load
+  - name: payment_type
+    load_strategy: full_load
+  - name: tax_rate
+    load_strategy: full_load
+  - name: fee_type
+    load_strategy: full_load
+
+  # --- Dimension-like tables (full reload; modest size) ---
+  - name: store
+    load_strategy: full_load
+  - name: department
+    load_strategy: full_load
+  - name: product_category
+    load_strategy: full_load
+  - name: employee
+    load_strategy: full_load
+  - name: product
+    load_strategy: full_load
+  - name: product_variant
+    load_strategy: full_load
+
+  # --- Customer data (incremental) ---
+  - name: customer
+    watermark_column: updated_at
+    load_strategy: incremental
+  - name: customer_address
+    watermark_column: updated_at
+    load_strategy: incremental
+  - name: customer_status_history
+    watermark_column: changed_at
+    load_strategy: incremental
+
+  # --- Transactional tables (incremental) ---
+  - name: invoice
+    watermark_column: updated_at
+    load_strategy: incremental
+  - name: invoice_line
+    watermark_column: updated_at
+    load_strategy: incremental
+  - name: invoice_status_history
+    watermark_column: changed_at
+    load_strategy: incremental
+  - name: payment
+    watermark_column: updated_at
+    load_strategy: incremental
+  - name: refund
+    watermark_column: updated_at
+    load_strategy: incremental
+  - name: invoice_adjustment
+    watermark_column: updated_at
+    load_strategy: incremental
+  - name: audit_log
+    watermark_column: changed_at
+    load_strategy: incremental

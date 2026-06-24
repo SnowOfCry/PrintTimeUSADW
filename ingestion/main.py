@@ -23,9 +23,7 @@ logger = get_logger(__name__)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="PrintTimeUSA ELT Ingestion Runner"
-    )
+    parser = argparse.ArgumentParser(description="PrintTimeUSA ELT Ingestion Runner")
     parser.add_argument(
         "--pipeline",
         required=True,
@@ -64,24 +62,36 @@ def run(pipeline_name: str, table_name: str, strategy: str) -> None:
     strategy : str
         'full_load' or 'incremental'.
     """
-    logger.info("Starting ingestion | pipeline=%s table=%s strategy=%s",
-                pipeline_name, table_name, strategy)
+    logger.info(
+        "Starting ingestion | pipeline=%s table=%s strategy=%s",
+        pipeline_name,
+        table_name,
+        strategy,
+    )
+
+    from ingestion.extract.oltp_extractor import OLTPExtractor
+    from ingestion.load.bronze_loader import BronzeLoader
 
     config = load_config()
 
-    # TODO: Replace with real extractor + loader calls.
-    # from ingestion.extract.oltp_extractor import OLTPExtractor
-    # from ingestion.load.bronze_loader import BronzeLoader
-    #
-    # extractor = OLTPExtractor(source_name=config["source_name"],
-    #                           pipeline_name=pipeline_name)
-    # df = extractor.extract_table(table_name=table_name, strategy=strategy)
-    #
-    # loader = BronzeLoader(pipeline_name=pipeline_name,
-    #                       target_table=f"raw_{table_name}")
-    # loader.load_dataframe_to_bronze(df=df, strategy=strategy)
+    extractor = OLTPExtractor(
+        source_name=config["source_name"],
+        pipeline_name=pipeline_name,
+    )
+    df = extractor.extract_table(table_name=table_name, strategy=strategy)
 
-    logger.info("Ingestion complete | pipeline=%s table=%s", pipeline_name, table_name)
+    loader = BronzeLoader(
+        pipeline_name=pipeline_name,
+        target_table=f"raw_{table_name}",
+    )
+    rows_loaded = loader.load_dataframe_to_bronze(df=df, strategy=strategy)
+
+    logger.info(
+        "Ingestion complete | pipeline=%s table=%s rows_loaded=%d",
+        pipeline_name,
+        table_name,
+        rows_loaded,
+    )
 
 
 def main() -> None:

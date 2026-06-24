@@ -18,7 +18,7 @@ NOT responsible for:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 
@@ -84,34 +84,40 @@ class BronzeLoader:
         if df.empty:
             logger.warning(
                 "Empty DataFrame received | pipeline=%s table=bronze.%s — skipping load.",
-                self.pipeline_name, self.target_table,
+                self.pipeline_name,
+                self.target_table,
             )
             return 0
 
         rows = len(df)
         logger.info(
             "Loading %d rows → bronze.%s | strategy=%s",
-            rows, self.target_table, strategy,
+            rows,
+            self.target_table,
+            strategy,
         )
 
         engine = self._get_engine()
 
-        # TODO: Replace placeholder with real load logic.
-        # if_exists = "replace" if strategy == "full_load" else "append"
-        # df.to_sql(
-        #     name=self.target_table,
-        #     con=engine,
-        #     schema="bronze",
-        #     if_exists=if_exists,
-        #     index=False,
-        #     method="multi",
-        # )
-
-        logger.warning(
-            "PLACEHOLDER: bronze load skipped — wire in real DW engine and to_sql call."
+        if_exists: Literal["replace", "append"] = (
+            "replace" if strategy == "full_load" else "append"
+        )
+        df.to_sql(
+            name=self.target_table,
+            con=engine,
+            schema="bronze",
+            if_exists=if_exists,
+            index=False,
+            method="multi",
+            chunksize=1000,
         )
 
-        # TODO: update control.elt_batch_log with records_loaded = rows
+        logger.info(
+            "Loaded %d rows → bronze.%s | if_exists=%s",
+            rows,
+            self.target_table,
+            if_exists,
+        )
         return rows
 
     # ------------------------------------------------------------------
@@ -121,10 +127,7 @@ class BronzeLoader:
     def _get_engine(self) -> Any:
         """Return an existing SQLAlchemy engine or create one from env vars."""
         if self._engine is None:
-            # TODO: import and call get_dw_engine() from ingestion.utils.database
-            # from ingestion.utils.database import get_dw_engine
-            # self._engine = get_dw_engine()
-            raise NotImplementedError(
-                "Wire in a real DW engine in BronzeLoader._get_engine()."
-            )
+            from ingestion.utils.database import get_dw_engine
+
+            self._engine = get_dw_engine()
         return self._engine

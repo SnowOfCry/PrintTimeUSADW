@@ -47,12 +47,14 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
             config.update(loaded)
         logger.debug("Config loaded from %s", path)
     else:
-        logger.warning("Config file not found at %s — using environment variables only.", path)
+        logger.warning(
+            "Config file not found at %s — using environment variables only.", path
+        )
 
     # Overlay INGESTION_* environment variables
     for key, value in os.environ.items():
         if key.startswith("INGESTION_"):
-            config_key = key[len("INGESTION_"):].lower()
+            config_key = key[len("INGESTION_") :].lower()
             config[config_key] = value
 
     return config

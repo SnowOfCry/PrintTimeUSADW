@@ -43,7 +43,9 @@ def get_watermark(
     """
     logger.debug(
         "Reading watermark | pipeline=%s source=%s table=%s",
-        pipeline_name, source_name, source_table,
+        pipeline_name,
+        source_name,
+        source_table,
     )
 
     # TODO: Replace with real query once DW connection is wired up.
@@ -97,7 +99,10 @@ def update_watermark(
     """
     logger.info(
         "Updating watermark | pipeline=%s source=%s table=%s value=%s",
-        pipeline_name, source_name, source_table, new_watermark_value,
+        pipeline_name,
+        source_name,
+        source_table,
+        new_watermark_value,
     )
 
     # TODO: Replace with real UPSERT once DW connection is wired up.

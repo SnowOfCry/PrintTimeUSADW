@@ -16,7 +16,6 @@ NOT responsible for:
 
 from __future__ import annotations
 
-import warnings
 from datetime import datetime
 from typing import Any
 
@@ -84,7 +83,9 @@ class OLTPExtractor:
         """
         logger.info(
             "Extracting | source=%s table=%s strategy=%s",
-            self.source_name, table_name, strategy,
+            self.source_name,
+            table_name,
+            strategy,
         )
 
         if strategy == "incremental":
@@ -94,16 +95,15 @@ class OLTPExtractor:
                 source_table=table_name,
             )
             logger.info("Watermark value: %s", last_value)
-            sql = self._build_incremental_query(table_name, watermark_column, last_value)
+            sql = self._build_incremental_query(
+                table_name, watermark_column, last_value
+            )
         else:
             sql = self._build_full_load_query(table_name)
 
         logger.debug("Extraction SQL: %s", sql)
 
-        # pandas warns when handed a raw DBAPI connection; it works fine here.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            df = pd.read_sql(sql, con=self._get_connection())
+        df = pd.read_sql(sql, con=self._get_connection())
         logger.info("Extracted %d rows from %s", len(df), table_name)
         return df
 
@@ -127,18 +127,13 @@ class OLTPExtractor:
             # No previous run — extract everything
             return f"SELECT * FROM {table_name}"
         return (
-            f"SELECT * FROM {table_name} "
-            f"WHERE {watermark_column} > '{last_value}'"
+            f"SELECT * FROM {table_name} " f"WHERE {watermark_column} > '{last_value}'"
         )
 
     def _get_connection(self) -> Any:
-        """Return an existing connection or open a new one from env vars.
-
-        Uses a raw psycopg2 connection: the Airflow image ships pandas 2.2 with
-        SQLAlchemy 1.4, a pair where pandas does not recognize a SQLAlchemy
-        engine as a connectable, so pandas.read_sql needs the DBAPI connection.
-        """
+        """Return an existing connection/engine or open one from env vars."""
         if self._connection is None:
-            from ingestion.utils.database import get_oltp_connection
-            self._connection = get_oltp_connection()
+            from ingestion.utils.database import get_oltp_engine
+
+            self._connection = get_oltp_engine()
         return self._connection

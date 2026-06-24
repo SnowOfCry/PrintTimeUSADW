@@ -26,12 +26,13 @@ logger = get_logger(__name__)
 # Data Warehouse (PostgreSQL) — used by BronzeLoader and watermark utilities
 # ---------------------------------------------------------------------------
 
+
 def get_dw_connection_string() -> str:
     """Build a PostgreSQL DSN from environment variables."""
-    host     = os.environ["DW_HOST"]
-    port     = os.environ.get("DW_PORT", "5432")
+    host = os.environ["DW_HOST"]
+    port = os.environ.get("DW_PORT", "5432")
     database = os.environ["DW_DB"]
-    user     = os.environ["DW_USER"]
+    user = os.environ["DW_USER"]
     password = os.environ["DW_PASSWORD"]
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 
@@ -90,12 +91,13 @@ def get_dw_psycopg2_conn() -> Generator[psycopg2.extensions.connection, None, No
 # host's local PostgreSQL. All credentials come from environment variables.
 # ---------------------------------------------------------------------------
 
+
 def get_oltp_connection_string() -> str:
     """Build a PostgreSQL DSN for the OLTP source from environment variables."""
-    host     = os.environ["OLTP_HOST"]
-    port     = os.environ.get("OLTP_PORT", "5432")
+    host = os.environ["OLTP_HOST"]
+    port = os.environ.get("OLTP_PORT", "5432")
     database = os.environ["OLTP_DB"]
-    user     = os.environ["OLTP_USER"]
+    user = os.environ["OLTP_USER"]
     password = os.environ["OLTP_PASSWORD"]
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 

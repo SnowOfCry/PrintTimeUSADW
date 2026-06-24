@@ -99,7 +99,7 @@ PrintTimeUSADW/
 │
 ├── airflow/
 │   ├── dags/
-│   │   └── example_elt_pipeline.py  ← Skeleton Airflow DAG
+│   │   └── printtime_elt_pipeline.py ← ELT pipeline Airflow DAG
 │   ├── logs/                         ← Git-ignored; written at runtime
 │   ├── plugins/
 │   └── config/
@@ -256,12 +256,11 @@ bash scripts/reset.sh
 
 ## 9. Airflow DAG
 
-File: [`airflow/dags/example_elt_pipeline.py`](airflow/dags/example_elt_pipeline.py)
+File: [`airflow/dags/printtime_elt_pipeline.py`](airflow/dags/printtime_elt_pipeline.py)
 
 ```
 start_pipeline
-    → extract_oltp_data      PythonOperator — calls OLTPExtractor
-    → load_bronze            PythonOperator — calls BronzeLoader
+    → ingest_oltp_to_bronze  PythonOperator — extract every configured table → bronze
     → run_dbt_silver         BashOperator   — dbt run --select silver
     → run_dbt_gold           BashOperator   — dbt run --select gold
     → run_dbt_tests          BashOperator   — dbt test
@@ -269,7 +268,7 @@ start_pipeline
 end_pipeline
 ```
 
-Trigger manually: Airflow UI → `example_elt_pipeline` → **▶ Trigger DAG**
+Trigger manually: Airflow UI → `printtime_elt_pipeline` → **▶ Trigger DAG**
 
 ---
 
@@ -378,7 +377,7 @@ CI runs on every push: lint (ruff), type check (mypy), unit tests (pytest), dock
 4. Implement `extract_table()` in [`ingestion/extract/oltp_extractor.py`](ingestion/extract/oltp_extractor.py) using `pd.read_sql()`
 5. Implement `load_dataframe_to_bronze()` in [`ingestion/load/bronze_loader.py`](ingestion/load/bronze_loader.py) using `df.to_sql()`
 6. Uncomment real SQL in [`ingestion/utils/watermark.py`](ingestion/utils/watermark.py)
-7. Wire the Airflow DAG — uncomment the real extractor/loader calls in [`airflow/dags/example_elt_pipeline.py`](airflow/dags/example_elt_pipeline.py)
+7. Wire the Airflow DAG — the real extractor/loader calls live in [`airflow/dags/printtime_elt_pipeline.py`](airflow/dags/printtime_elt_pipeline.py)
 8. Add `CREATE TABLE IF NOT EXISTS bronze.raw_<table>` scripts to `sql/bronze/` and run them once
 
 ---

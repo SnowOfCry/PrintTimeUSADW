@@ -1,20 +1,19 @@
 """
-example_elt_pipeline.py
------------------------
-Skeleton ELT pipeline DAG for PrintTimeUSA Data Warehouse.
+printtime_elt_pipeline.py
+-------------------------
+PrintTimeUSA Data Warehouse — end-to-end ELT pipeline.
 
 Flow:
     start_pipeline
-        → extract_oltp_data          (Python: reads from OLTP source)
-        → load_bronze                (Python: loads raw data into bronze schema)
+        → ingest_oltp_to_bronze      (Python: extract from OLTP → load bronze, per table)
         → run_dbt_silver             (dbt: cleans + standardizes bronze → silver)
         → run_dbt_gold               (dbt: builds dimensions + facts silver → gold)
         → run_dbt_tests              (dbt: data quality tests on silver + gold)
         → update_control_logs        (Python: finalizes batch log record)
     end_pipeline
 
-Replace the BashOperator placeholders with real source credentials and table
-names as you extend this pipeline.
+The ingestion step reads the table list from ingestion/config/ingestion_config.yml
+and runs the extract + bronze load for each table using the ingestion package.
 """
 
 from __future__ import annotations
@@ -42,7 +41,7 @@ DEFAULT_ARGS = {
 # Pipeline-level constants
 # (Replace hardcoded values with Airflow Variables or Connections in production)
 # ---------------------------------------------------------------------------
-PIPELINE_NAME = "example_elt_pipeline"
+PIPELINE_NAME = "printtime_elt_pipeline"
 DBT_PROJECT_DIR = "/dbt/printtime_dw"   # mounted volume path inside dbt container
 DBT_PROFILES_DIR = "/dbt/printtime_dw"
 
@@ -51,46 +50,35 @@ DBT_PROFILES_DIR = "/dbt/printtime_dw"
 # Python callables
 # ---------------------------------------------------------------------------
 
-def _extract_oltp_data(**context: dict) -> None:
+def _ingest_oltp_to_bronze(**context: dict) -> None:
     """
-    Extract raw data from the OLTP source system.
+    Extract every configured OLTP table and load it into the bronze schema.
 
-    Replace this placeholder with a real call to ingestion/extract/oltp_extractor.py.
-    The extractor should:
-      - Connect to the OLTP source using environment-based credentials.
-      - Use the watermark from control.elt_watermark for incremental loads.
-      - Return (or store) the raw records for the loader.
+    Reads the table list (name, load_strategy) from ingestion_config.yml and
+    runs the tested extract + load path (ingestion.main.run) for each table.
     """
-    # TODO: import and call OLTPExtractor from ingestion layer
-    # from ingestion.extract.oltp_extractor import OLTPExtractor
-    # extractor = OLTPExtractor(source_name="oltp_printtime", pipeline_name=PIPELINE_NAME)
-    # rows = extractor.extract_table(table_name="orders", watermark_column="updated_at")
-    # context["ti"].xcom_push(key="extracted_rows", value=len(rows))
-    print(f"[{PIPELINE_NAME}] PLACEHOLDER: extract_oltp_data — wire in OLTPExtractor here.")
+    from ingestion.main import run
+    from ingestion.utils.config_loader import load_config
 
+    config = load_config()
+    tables = config.get("tables", [])
+    if not tables:
+        raise ValueError("No tables configured in ingestion_config.yml")
 
-def _load_bronze(**context: dict) -> None:
-    """
-    Load extracted raw data into the bronze schema.
-
-    Replace this placeholder with a real call to ingestion/load/bronze_loader.py.
-    The loader should:
-      - Accept a DataFrame or list of dicts.
-      - Write to bronze.<target_table> with no business transformations.
-      - Log results to control.elt_batch_log.
-    """
-    # TODO: import and call BronzeLoader from ingestion layer
-    # from ingestion.load.bronze_loader import BronzeLoader
-    # loader = BronzeLoader(pipeline_name=PIPELINE_NAME, target_table="orders")
-    # loader.load_dataframe_to_bronze(df=extracted_df)
-    print(f"[{PIPELINE_NAME}] PLACEHOLDER: load_bronze — wire in BronzeLoader here.")
+    default_strategy = config.get("default_load_strategy", "incremental")
+    for table in tables:
+        run(
+            pipeline_name=PIPELINE_NAME,
+            table_name=table["name"],
+            strategy=table.get("load_strategy", default_strategy),
+        )
 
 
 def _update_control_logs(**context: dict) -> None:
     """
     Mark the batch as complete (success or failure) in control.elt_batch_log.
 
-    In production, retrieve the batch_id from XCom (set during load_bronze)
+    In production, retrieve the batch_id from XCom (set during ingestion)
     and update status + ended_at.
     """
     # TODO: import and call watermark + batch log utilities
@@ -118,21 +106,14 @@ with DAG(
     start_pipeline = EmptyOperator(task_id="start_pipeline")
     end_pipeline   = EmptyOperator(task_id="end_pipeline")
 
-    # ── 1. Extract OLTP data (Python) ────────────────────────────────────────
-    extract_oltp_data = PythonOperator(
-        task_id="extract_oltp_data",
-        python_callable=_extract_oltp_data,
-        doc_md="Reads raw data from the OLTP source using watermarks for incremental loads.",
+    # ── 1. Extract OLTP data and load into bronze (Python) ───────────────────
+    ingest_oltp_to_bronze = PythonOperator(
+        task_id="ingest_oltp_to_bronze",
+        python_callable=_ingest_oltp_to_bronze,
+        doc_md="Extracts every configured OLTP table and loads it into bronze. No transformations.",
     )
 
-    # ── 2. Load raw data into bronze (Python) ────────────────────────────────
-    load_bronze = PythonOperator(
-        task_id="load_bronze",
-        python_callable=_load_bronze,
-        doc_md="Writes extracted raw data to the bronze schema. No transformations applied.",
-    )
-
-    # ── 3. dbt: silver layer ─────────────────────────────────────────────────
+    # ── 2. dbt: silver layer ─────────────────────────────────────────────────
     # BashOperator runs dbt inside the airflow container (dbt must be installed there),
     # OR swap for DockerOperator to run in the dedicated dbt container.
     run_dbt_silver = BashOperator(
@@ -144,7 +125,7 @@ with DAG(
         doc_md="Runs dbt silver models: cleans, standardizes, and deduplicates bronze data.",
     )
 
-    # ── 4. dbt: gold layer ───────────────────────────────────────────────────
+    # ── 3. dbt: gold layer ───────────────────────────────────────────────────
     run_dbt_gold = BashOperator(
         task_id="run_dbt_gold",
         bash_command=(
@@ -154,7 +135,7 @@ with DAG(
         doc_md="Runs dbt gold models: builds star-schema dimensions and fact tables.",
     )
 
-    # ── 5. dbt: data quality tests ───────────────────────────────────────────
+    # ── 4. dbt: data quality tests ───────────────────────────────────────────
     run_dbt_tests = BashOperator(
         task_id="run_dbt_tests",
         bash_command=(
@@ -164,7 +145,7 @@ with DAG(
         doc_md="Runs dbt tests on silver and gold models. Fails the DAG if tests do not pass.",
     )
 
-    # ── 6. Update pipeline control logs ─────────────────────────────────────
+    # ── 5. Update pipeline control logs ─────────────────────────────────────
     update_control_logs = PythonOperator(
         task_id="update_control_logs",
         python_callable=_update_control_logs,
@@ -174,8 +155,7 @@ with DAG(
     # ── Task dependencies ────────────────────────────────────────────────────
     (
         start_pipeline
-        >> extract_oltp_data
-        >> load_bronze
+        >> ingest_oltp_to_bronze
         >> run_dbt_silver
         >> run_dbt_gold
         >> run_dbt_tests

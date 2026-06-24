@@ -16,6 +16,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-changeme_in_env}
     AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+    # Make the mounted ingestion package importable from DAGs and tasks
+    PYTHONPATH: /opt/airflow
     # Forward warehouse connection to DAGs
     DW_HOST: postgres
     DW_PORT: "5432"

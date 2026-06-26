@@ -74,6 +74,20 @@ def run(pipeline_name: str, table_name: str, strategy: str) -> None:
 
     config = load_config()
 
+    # Resolve the Bronze landing table from config (matches the sql/bronze DDL:
+    # OLTP entities -> oltp_*, reference data -> ref_*). Fail loudly if a source
+    # table has no mapping rather than silently inventing a raw_* table.
+    table_cfg = next(
+        (t for t in config.get("tables", []) if t.get("name") == table_name),
+        None,
+    )
+    if table_cfg is None or not table_cfg.get("bronze_table"):
+        raise ValueError(
+            f"No 'bronze_table' mapping for source table '{table_name}' in "
+            "ingestion_config.yml"
+        )
+    target_table = table_cfg["bronze_table"]
+
     extractor = OLTPExtractor(
         source_name=config["source_name"],
         pipeline_name=pipeline_name,
@@ -82,7 +96,7 @@ def run(pipeline_name: str, table_name: str, strategy: str) -> None:
 
     loader = BronzeLoader(
         pipeline_name=pipeline_name,
-        target_table=f"raw_{table_name}",
+        target_table=target_table,
     )
     rows_loaded = loader.load_dataframe_to_bronze(df=df, strategy=strategy)
 

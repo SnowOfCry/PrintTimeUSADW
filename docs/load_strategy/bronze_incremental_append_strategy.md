@@ -17,10 +17,10 @@ If a source row changes, the changed version is **inserted as a new Bronze row**
 
 ## How batch IDs work
 
-Every load runs under a single ETL batch tracked in `control.etl_batch_control`. The batch's `batch_id` is stamped onto every row it inserts via `bronze_batch_id`. Because Bronze is append-only:
+Every load runs under a single ETL batch tracked in `audit.etl_batch_control`. The batch's `batch_id` is stamped onto every row it inserts via `bronze_batch_id`. Because Bronze is append-only:
 
 - A batch can be identified, counted, and (if it failed midway) quarantined or superseded by a later batch without mutating prior rows.
-- Lineage questions ("which load produced this row?") are answered by joining `bronze_batch_id` back to `control.etl_batch_control`.
+- Lineage questions ("which load produced this row?") are answered by joining `bronze_batch_id` back to `audit.etl_batch_control`.
 - `bronze_loaded_at_timestamp` records when the row landed; `bronze_extracted_at_timestamp` records when the extractor read it from the source.
 
 ## How row hashes work
@@ -35,7 +35,7 @@ The hash is stored, never used to filter inserts — Bronze still appends every 
 
 ## How watermarks work
 
-Each Bronze table declares a recommended watermark column (see the mapping doc). The ETL reads the high-water mark of the last successful batch from `control.etl_batch_control.watermark_value_end` for that target, then extracts only source rows beyond it:
+Each Bronze table declares a recommended watermark column (see the mapping doc). The ETL reads the high-water mark of the last successful batch from `audit.etl_batch_control.watermark_value_end` for that target, then extracts only source rows beyond it:
 
 1. Read `watermark_value_end` for the target table (e.g. the max `source_updated_at` already loaded).
 2. Extract source rows where the source watermark column is greater than that value.

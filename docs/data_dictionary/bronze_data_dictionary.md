@@ -33,7 +33,7 @@ Tables: 20
 | source_row_version | INTEGER | NULL | Source row_version counter for change tracking. | customer.row_version | 3 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag as extracted. | customer.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | customer.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -69,7 +69,7 @@ Tables: 20
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | customer_address.updated_at | 2026-05-20 08:00:00 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | customer_address.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | customer_address.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -109,7 +109,7 @@ Tables: 20
 | source_row_version | INTEGER | NULL | Source row_version counter. | product.row_version | 2 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | product.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | product.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -142,7 +142,7 @@ Tables: 20
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | product_category.updated_at | 2025-12-01 10:00:00 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | product_category.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | product_category.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -174,7 +174,7 @@ Tables: 20
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | department.updated_at | 2024-01-01 09:00:00 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | department.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | department.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -213,7 +213,7 @@ Tables: 20
 | source_row_version | INTEGER | NULL | Source row_version counter. | employee.row_version | 2 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | employee.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | employee.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -253,7 +253,7 @@ Tables: 20
 | source_row_version | INTEGER | NULL | Source row_version counter. | store.row_version | 1 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | store.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | store.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -301,7 +301,7 @@ Tables: 20
 | source_row_version | INTEGER | NULL | Source row_version counter. | invoice.row_version | 4 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | invoice.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | invoice.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -340,7 +340,7 @@ Tables: 20
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | invoice_line.updated_at | 2025-11-14 10:30:00 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | invoice_line.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | invoice_line.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -384,7 +384,7 @@ Tables: 20
 | source_row_version | INTEGER | NULL | Source row_version counter. | payment.row_version | 1 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | payment.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | payment.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -414,7 +414,7 @@ Tables: 20
 | changed_at_source_timestamp | TIMESTAMP | NULL | When the status change occurred; incremental watermark. | invoice_status_history.changed_at | 2025-11-20 16:45:00 |
 | changed_by | BIGINT | NULL | Employee id that made the change (raw). | invoice_status_history.changed_by | 17 |
 | note | VARCHAR(200) | NULL | Free-text note about the change. | invoice_status_history.note | Balance paid in full |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -444,7 +444,7 @@ Tables: 20
 | changed_at_source_timestamp | TIMESTAMP | NULL | When the status change occurred; incremental watermark. | customer_status_history.changed_at | 2026-01-15 09:00:00 |
 | changed_by | BIGINT | NULL | Employee id that made the change (raw). | customer_status_history.changed_by | 17 |
 | reason | VARCHAR(200) | NULL | Reason for the status change. | customer_status_history.reason | No orders in 12 months |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -478,7 +478,7 @@ Tables: 20
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | refund.updated_at | 2025-12-01 11:00:00 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | refund.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | refund.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -512,7 +512,7 @@ Tables: 20
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | invoice_adjustment.updated_at | 2025-11-25 10:00:00 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | invoice_adjustment.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | invoice_adjustment.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -546,7 +546,7 @@ Tables: 20
 | source_row_version | INTEGER | NULL | Source row_version counter. | payment_method.row_version | 1 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | payment_method.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | payment_method.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -578,7 +578,7 @@ Tables: 20
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | payment_type.updated_at | 2024-01-01 09:00:00 |
 | is_deleted_source_flag | BOOLEAN | NULL | Source soft-delete flag. | payment_type.is_deleted | false |
 | deleted_at_source_timestamp | TIMESTAMP | NULL | Source soft-delete timestamp. | payment_type.deleted_at | NULL |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -610,7 +610,7 @@ Tables: 20
 | is_active_flag | BOOLEAN | NULL | Whether the rate is active. | tax_rate.is_active | true |
 | created_at_source_timestamp | TIMESTAMP | NULL | Source row creation timestamp. | tax_rate.created_at | 2024-01-01 09:00:00 |
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | tax_rate.updated_at | 2024-01-01 09:00:00 |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -637,7 +637,7 @@ Tables: 20
 | state_name | VARCHAR(50) | NULL | Full state name. | ref_state.state_name | California |
 | created_at_source_timestamp | TIMESTAMP | NULL | Source row creation timestamp. | ref_state.created_at | 2024-01-01 09:00:00 |
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | ref_state.updated_at | 2024-01-01 09:00:00 |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -666,7 +666,7 @@ Tables: 20
 | sort_order | SMALLINT | NULL | Display/sort order. | ref_invoice_status.sort_order | 3 |
 | created_at_source_timestamp | TIMESTAMP | NULL | Source row creation timestamp. | ref_invoice_status.created_at | 2024-01-01 09:00:00 |
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | ref_invoice_status.updated_at | 2024-01-01 09:00:00 |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |
@@ -693,7 +693,7 @@ Tables: 20
 | status_name | VARCHAR(50) | NULL | Status display name. | ref_payment_status.status_name | Completed |
 | created_at_source_timestamp | TIMESTAMP | NULL | Source row creation timestamp. | ref_payment_status.created_at | 2024-01-01 09:00:00 |
 | updated_at_source_timestamp | TIMESTAMP | NULL | Source last-updated timestamp; incremental watermark. | ref_payment_status.updated_at | 2024-01-01 09:00:00 |
-| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to control.etl_batch_control.batch_id. | ETL metadata | 10427 |
+| bronze_batch_id | BIGINT | NOT NULL | Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 10427 |
 | bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | Timestamp when the row was written into Bronze (load time). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-06-18 09:14:22 |
 | bronze_extracted_at_timestamp | TIMESTAMP | NULL | Timestamp when the extractor pulled the row from the source. | ETL metadata | 2026-06-18 09:14:01 |
 | bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier (e.g. oltp, 4over_csv, manual_file, reference). | ETL metadata | oltp |

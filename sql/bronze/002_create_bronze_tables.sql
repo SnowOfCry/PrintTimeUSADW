@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_customer (
 COMMENT ON TABLE bronze.oltp_customer IS 'Raw customer master records. Feeds dim_customer (SCD2 in Gold) and supplies customer attributes referenced by fact_customer_behavior_snapshot.';
 COMMENT ON COLUMN bronze.oltp_customer.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_customer.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_customer.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_customer.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_customer_address
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_customer_address (
 COMMENT ON TABLE bronze.oltp_customer_address IS 'Raw customer address records (billing/shipping). Provides street/city/state/county enrichment for dim_customer.';
 COMMENT ON COLUMN bronze.oltp_customer_address.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_customer_address.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_customer_address.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_customer_address.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_product
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_product (
 COMMENT ON TABLE bronze.oltp_product IS 'Raw product master. Feeds dim_product (SCD2) with price, markup, brand, and department/category links.';
 COMMENT ON COLUMN bronze.oltp_product.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_product.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_product.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_product.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_product_category
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_product_category (
 COMMENT ON TABLE bronze.oltp_product_category IS 'Raw product category lookup. Supplies category_description and links category to department for dim_product.';
 COMMENT ON COLUMN bronze.oltp_product_category.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_product_category.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_product_category.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_product_category.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_department
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_department (
 COMMENT ON TABLE bronze.oltp_department IS 'Raw department lookup (SIGNS, EMB, DTF, PRINT). Supplies department_number and department_description for dim_product.';
 COMMENT ON COLUMN bronze.oltp_department.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_department.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_department.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_department.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_employee
@@ -245,7 +245,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_employee (
 COMMENT ON TABLE bronze.oltp_employee IS 'Raw employee master. Feeds dim_cashier (SCD2) with name, active status, and store assignment.';
 COMMENT ON COLUMN bronze.oltp_employee.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_employee.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_employee.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_employee.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_store
@@ -288,7 +288,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_store (
 COMMENT ON TABLE bronze.oltp_store IS 'Raw store master. Feeds dim_store (SCD2) and supplies store labels denormalized into dim_cashier and dim_invoice.';
 COMMENT ON COLUMN bronze.oltp_store.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_store.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_store.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_store.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_invoice
@@ -339,7 +339,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_invoice (
 COMMENT ON TABLE bronze.oltp_invoice IS 'Raw invoice headers. Feeds dim_invoice (SCD2 on status/total) and supplies header context to fact_retail_sales, fact_payments, and fact_customer_behavior_snapshot. Status changes are preserved as appended versions.';
 COMMENT ON COLUMN bronze.oltp_invoice.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_invoice.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_invoice.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_invoice.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_invoice_line
@@ -381,7 +381,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_invoice_line (
 COMMENT ON TABLE bronze.oltp_invoice_line IS 'Raw invoice line items. The grain source for fact_retail_sales (qty, price, cost, extended amount).';
 COMMENT ON COLUMN bronze.oltp_invoice_line.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_invoice_line.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_invoice_line.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_invoice_line.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_payment
@@ -428,7 +428,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_payment (
 COMMENT ON TABLE bronze.oltp_payment IS 'Raw payment transactions (deposits, balances, full payments, refunds, adjustments). The grain source for fact_payments.';
 COMMENT ON COLUMN bronze.oltp_payment.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_payment.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_payment.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_payment.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_invoice_status_history
@@ -461,7 +461,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_invoice_status_history (
 COMMENT ON TABLE bronze.oltp_invoice_status_history IS 'Raw invoice status change log. Gives Silver/Gold the authoritative status-change timeline for SCD2 dim_invoice, complementing appended invoice versions.';
 COMMENT ON COLUMN bronze.oltp_invoice_status_history.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_invoice_status_history.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_invoice_status_history.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_invoice_status_history.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_customer_status_history
@@ -494,7 +494,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_customer_status_history (
 COMMENT ON TABLE bronze.oltp_customer_status_history IS 'Raw customer status change log. Supports customer_status history for fact_customer_behavior_snapshot and audit of active/inactive transitions.';
 COMMENT ON COLUMN bronze.oltp_customer_status_history.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_customer_status_history.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_customer_status_history.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_customer_status_history.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_refund
@@ -531,7 +531,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_refund (
 COMMENT ON TABLE bronze.oltp_refund IS 'Raw refund records chained to payments. Supplements fact_payments refund analysis and reconciliation.';
 COMMENT ON COLUMN bronze.oltp_refund.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_refund.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_refund.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_refund.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.oltp_invoice_adjustment
@@ -568,7 +568,7 @@ CREATE TABLE IF NOT EXISTS bronze.oltp_invoice_adjustment (
 COMMENT ON TABLE bronze.oltp_invoice_adjustment IS 'Raw invoice adjustments (credits/debits). Supports reconciliation of invoice totals feeding dim_invoice and fact_payments.';
 COMMENT ON COLUMN bronze.oltp_invoice_adjustment.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.oltp_invoice_adjustment.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.oltp_invoice_adjustment.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.oltp_invoice_adjustment.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.ref_payment_method
@@ -605,7 +605,7 @@ CREATE TABLE IF NOT EXISTS bronze.ref_payment_method (
 COMMENT ON TABLE bronze.ref_payment_method IS 'Reference payment method lookup. Feeds dim_payment_method (method code/name/type/active).';
 COMMENT ON COLUMN bronze.ref_payment_method.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.ref_payment_method.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.ref_payment_method.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.ref_payment_method.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.ref_payment_type
@@ -640,7 +640,7 @@ CREATE TABLE IF NOT EXISTS bronze.ref_payment_type (
 COMMENT ON TABLE bronze.ref_payment_type IS 'Reference payment type lookup. Feeds dim_payment_type (DEPOSIT, BALANCE, FULL, REFUND, ADJUSTMENT).';
 COMMENT ON COLUMN bronze.ref_payment_type.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.ref_payment_type.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.ref_payment_type.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.ref_payment_type.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.ref_tax_rate
@@ -675,7 +675,7 @@ CREATE TABLE IF NOT EXISTS bronze.ref_tax_rate (
 COMMENT ON TABLE bronze.ref_tax_rate IS 'Reference tax rate lookup. Supports tax reconciliation for dim_invoice / fact_payments (tax_amount validation).';
 COMMENT ON COLUMN bronze.ref_tax_rate.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.ref_tax_rate.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.ref_tax_rate.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.ref_tax_rate.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.ref_state
@@ -705,7 +705,7 @@ CREATE TABLE IF NOT EXISTS bronze.ref_state (
 COMMENT ON TABLE bronze.ref_state IS 'Reference state lookup (CA, AZ, TX). Supports state/region standardization for dim_customer and dim_store.';
 COMMENT ON COLUMN bronze.ref_state.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.ref_state.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.ref_state.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.ref_state.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.ref_invoice_status
@@ -737,7 +737,7 @@ CREATE TABLE IF NOT EXISTS bronze.ref_invoice_status (
 COMMENT ON TABLE bronze.ref_invoice_status IS 'Reference invoice status lookup (OPEN, PARTIAL, PAID, VOID). Standardizes invoice_status values for dim_invoice.';
 COMMENT ON COLUMN bronze.ref_invoice_status.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.ref_invoice_status.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.ref_invoice_status.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.ref_invoice_status.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
 
 -- ---------------------------------------------------------------------
 -- bronze.ref_payment_status
@@ -767,4 +767,4 @@ CREATE TABLE IF NOT EXISTS bronze.ref_payment_status (
 COMMENT ON TABLE bronze.ref_payment_status IS 'Reference payment status lookup. Standardizes payment_status values feeding fact_payments.';
 COMMENT ON COLUMN bronze.ref_payment_status.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.ref_payment_status.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
-COMMENT ON COLUMN bronze.ref_payment_status.bronze_batch_id IS 'ETL batch id; joins to control.etl_batch_control.';
+COMMENT ON COLUMN bronze.ref_payment_status.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';

@@ -35,7 +35,7 @@ class OLTPExtractor:
     ----------
     source_name : str
         Logical name for the source system (e.g. 'oltp_printtime').
-        Matches the value stored in control.elt_watermark.source_name.
+        Carried as lineage; watermarks are tracked in audit.etl_batch_control.
     pipeline_name : str
         Parent pipeline identifier for watermark lookups.
     connection : Any, optional

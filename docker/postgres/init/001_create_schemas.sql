@@ -15,10 +15,8 @@ COMMENT ON SCHEMA silver IS 'Conformed layer: cleaned and standardized data prod
 CREATE SCHEMA IF NOT EXISTS gold;
 COMMENT ON SCHEMA gold IS 'Analytical layer: star-schema dimensions and facts produced by dbt gold models.';
 
--- Audit: data lineage, reconciliation, and row-count audit records.
+-- Audit: governance/control layer — ETL batch control (watermarks, run stats)
+-- and a generic insert-only change/audit trail. (Replaces the former 'control'
+-- schema; batch + watermark tracking now lives in audit.etl_batch_control.)
 CREATE SCHEMA IF NOT EXISTS audit;
-COMMENT ON SCHEMA audit IS 'Audit layer: reconciliation counts, lineage records, and data quality results.';
-
--- Control: pipeline orchestration metadata (batches, watermarks, logs).
-CREATE SCHEMA IF NOT EXISTS control;
-COMMENT ON SCHEMA control IS 'Control layer: ELT pipeline logs, watermarks, and orchestration metadata.';
+COMMENT ON SCHEMA audit IS 'Governance layer: ETL batch control (watermarks, run stats) and generic insert-only audit trail.';

@@ -8,8 +8,10 @@ All credentials are read from environment variables — never hardcoded.
 
 from __future__ import annotations
 
+import json
 import os
 from contextlib import contextmanager
+from functools import partial
 from typing import Generator
 
 import psycopg2
@@ -20,6 +22,10 @@ from sqlalchemy.engine import Engine
 from ingestion.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# JSON serializer for JSONB columns (e.g. bronze_raw_payload_jsonb): str-encode
+# Decimal/date/datetime so raw source payloads serialize without error.
+_json_serializer = partial(json.dumps, default=str)
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +50,13 @@ def get_dw_engine() -> Engine:
     Use this for pandas to_sql / read_sql operations.
     """
     dsn = get_dw_connection_string()
-    engine = create_engine(dsn, pool_pre_ping=True, pool_size=2, max_overflow=4)
+    engine = create_engine(
+        dsn,
+        pool_pre_ping=True,
+        pool_size=2,
+        max_overflow=4,
+        json_serializer=_json_serializer,
+    )
     logger.debug("DW engine created | host=%s", os.environ.get("DW_HOST"))
     return engine
 
@@ -61,7 +73,7 @@ def get_dw_psycopg2_conn() -> Generator[psycopg2.extensions.connection, None, No
     -------
     with get_dw_psycopg2_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE control.elt_batch_log SET status = %s ...", ("success",))
+            cur.execute("UPDATE audit.etl_batch_control SET batch_status = %s ...", ("succeeded",))
         conn.commit()
     """
     conn: psycopg2.extensions.connection | None = None

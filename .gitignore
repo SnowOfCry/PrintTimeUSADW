@@ -70,3 +70,4 @@ Desktop.ini
 # --- Docs build ---
 docs/_build/
 site/
+sql/oltp/oltp_seed.sql

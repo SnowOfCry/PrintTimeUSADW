@@ -52,15 +52,14 @@ PostgreSQL Schemas
 bronze   Raw data as extracted (Python writes here)
 silver   Cleaned, standardized, deduplicated (dbt writes here)
 gold     Star-schema dimensions and facts (dbt writes here)
-audit    Row counts, lineage, reconciliation records
-control  Pipeline logs, watermarks, batch tracking
+audit    Reconciliation/lineage records, ETL batch control, watermarks
 ```
 
 **Extract** — Python reads raw records from the OLTP source system, using watermarks for incremental loads.  
 **Load** — Python writes raw records into `bronze` with no business transformations.  
 **Transform** — dbt models clean bronze data into `silver`, then build dimensional models in `gold`.  
 **Orchestrate** — Airflow DAGs schedule and sequence every step.  
-**Monitor** — `control.elt_batch_log` tracks every pipeline run; `control.elt_watermark` tracks incremental progress.  
+**Monitor** — `audit.etl_batch_control` tracks every ETL batch (run stats plus incremental watermarks); `audit.audit_log` holds the row-level change trail.  
 **Quality** — dbt tests validate data; SonarQube checks Python code quality.
 
 ---
@@ -86,7 +85,7 @@ PrintTimeUSADW/
 │   ├── postgres/
 │   │   ├── init/
 │   │   │   ├── 001_create_schemas.sql
-│   │   │   └── 002_create_control_tables.sql
+│   │   │   └── 002_create_audit_tables.sql
 │   │   └── Dockerfile
 │   ├── airflow/
 │   │   ├── Dockerfile
@@ -135,8 +134,7 @@ PrintTimeUSADW/
 │   ├── bronze/
 │   ├── silver/
 │   ├── gold/
-│   ├── audit/
-│   └── control/
+│   └── audit/
 │
 ├── tests/
 │   ├── unit/
@@ -280,7 +278,7 @@ Python is responsible **only** for:
 - Connecting to the OLTP source
 - Extracting raw data using watermarks for incremental loads
 - Loading raw records into `bronze` with zero business transformations
-- Writing to `control.elt_batch_log` and `control.elt_watermark`
+- Writing batch and watermark state to `audit.etl_batch_control`
 
 Python is **NOT** responsible for cleaning data, building dimensions, or any dbt logic.
 
@@ -334,24 +332,28 @@ Location: [`sql/`](sql/)
 | `sql/bronze/` | Ad-hoc raw data queries, manual bronze table DDL |
 | `sql/silver/` | Prototype silver queries before converting to dbt |
 | `sql/gold/` | Prototype gold queries |
-| `sql/audit/` | Reconciliation counts, lineage inserts |
-| `sql/control/` | Manual control-table operations |
+| `sql/audit/` | ETL batch control, watermark queries, reconciliation counts, lineage inserts |
 
 ---
 
 ## 13. Pipeline Logs & Watermarks
 
 ```sql
--- Check recent pipeline runs
-SELECT pipeline_name, status, records_loaded, started_at, ended_at, error_message
-FROM   control.elt_batch_log
-ORDER  BY started_at DESC
+-- Check recent ETL batches
+SELECT source_system, target_table, load_type, batch_status,
+       rows_extracted, rows_inserted, rows_updated,
+       batch_start_timestamp, batch_end_timestamp, error_message
+FROM   audit.etl_batch_control
+ORDER  BY batch_start_timestamp DESC
 LIMIT  20;
 
--- Check watermarks
-SELECT pipeline_name, source_table, watermark_column, last_watermark_value, updated_at
-FROM   control.elt_watermark
-WHERE  is_active = TRUE;
+-- Latest successful watermark per target table
+SELECT DISTINCT ON (target_table)
+       source_system, target_table, watermark_column,
+       watermark_value_end AS last_watermark, batch_end_timestamp
+FROM   audit.etl_batch_control
+WHERE  batch_status = 'SUCCESS'
+ORDER  BY target_table, batch_end_timestamp DESC;
 ```
 
 ---

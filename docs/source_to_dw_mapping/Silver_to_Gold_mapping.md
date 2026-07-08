@@ -173,7 +173,7 @@ Source: **silver.customer**; lookups: **silver.customer_address**, **silver.stat
 | customer_name | direct | silver.customer.silver_customer_name. |
 | customer_street_address | lookup | silver.customer_address.silver_street_address_line_1 (primary address). |
 | customer_city | lookup | silver.customer_address.silver_city (primary address). |
-| **customer_county** | **generate** | ⚠️ **No source in OLTP/Bronze/Silver.** Defaulted to `'Unknown'` until a county source (e.g. ZIP→county reference) is added. **GAP.** |
+| **customer_county** | **generate** | ⚠️ **No source in OLTP/Bronze/Silver.** Defaulted to `'Not Provided'` until a county source (e.g. ZIP→county reference) is added. **GAP.** |
 | customer_state | lookup | silver.state.silver_state_name via silver.customer_address.silver_state_code. |
 | customer_city_state | derive | `customer_city || ', ' || state` (e.g. "Modesto, CA"). |
 | first_order_date_key | lookup | gold.dim_date.date_key via silver.customer.silver_first_order_date (role: vw_first_order_date). |
@@ -231,7 +231,7 @@ Source: **silver.invoice_line**; header lookup: **silver.invoice**; dimension ke
 | source_system / source_record_id / etl_batch_id / etl_load_timestamp / etl_updated_timestamp | generate | Audit block (`source_record_id` = silver_invoice_line_id as text). |
 | is_complete / is_validated / dq_issue_flag / dq_issue_description | generate | DQ block. |
 
-Unresolved dimension lookups default to the `-1` Unknown member.
+Unresolved dimension lookups default to the `-1` Not Provided member.
 
 ---
 
@@ -258,7 +258,7 @@ Source: **silver.payment**; dimension key lookups as noted
 | audit block | generate | `source_record_id` = silver_payment_id as text. |
 | DQ block | generate | is_complete/is_validated/dq_issue_flag/dq_issue_description. |
 
-Unresolved dimension lookups default to the `-1` Unknown member.
+Unresolved dimension lookups default to the `-1` Not Provided member.
 
 ---
 
@@ -287,8 +287,8 @@ Source: **silver.customer** + aggregates over **silver.invoice** / **silver.paym
 
 ## Gaps and assumptions
 
-- **`dim_customer.customer_county` has no source** anywhere in OLTP → Bronze → Silver. It is generated as `'Unknown'` until a county reference (e.g. a ZIP→county lookup) is introduced. This is the only Gold column with no traceable source.
+- **`dim_customer.customer_county` has no source** anywhere in OLTP → Bronze → Silver. It is generated as `'Not Provided'` until a county reference (e.g. a ZIP→county lookup) is introduced. This is the only Gold column with no traceable source.
 - **`record_hash` is SHA-256 (`CHAR(64)`)** in Gold, whereas Bronze/Silver use unbounded-text hashes (`bronze_row_hash` / `silver_row_hash`), which the ETL implements as MD5. Gold deliberately standardizes on SHA-256 for SCD2 change detection; the two hash families are independent and not compared across layers.
 - **Natural keys are sourced from Silver business columns** (e.g. `customer_id` ← `silver_customer_account_no`, `store_id` ← `silver_store_code`), not from Silver's numeric `silver_*_id` surrogate-ish business keys, to keep Gold natural keys human-meaningful.
 - **Dimension key lookups in facts** use the *current* (`is_current = TRUE`) dimension version; an as-of (effective-dated) join may be substituted where point-in-time accuracy is required.
-- **Unknown members:** unresolved fact→dimension lookups resolve to the `-1` Unknown dimension member; unresolved text attributes default to `'Unknown'`.
+- **Not Provided members:** unresolved fact→dimension lookups resolve to the `-1` Not Provided dimension member; unresolved text attributes default to `'Not Provided'`.

@@ -92,9 +92,9 @@ WHERE  f.invoice_key = (SELECT invoice_key FROM gold.dim_invoice d2 WHERE d2.inv
 
 (Sketch — the production version stages the key resolution instead of nesting subqueries.)
 
-## Unknown members
+## Not Provided members
 
-Before the first fact load, every dimension is seeded with a `-1` "Unknown" member (`customer_key = -1`, attributes `'Unknown'`). Any fact row whose dimension lookup fails resolves to `-1` instead of NULL, so BI tools never produce blank-row joins and unmatched rows stay countable.
+Before the first fact load, every dimension is seeded with a `-1` "Not Provided" member (`customer_key = -1`, attributes `'Not Provided'`). Any fact row whose dimension lookup fails resolves to `-1` instead of NULL, so BI tools never produce blank-row joins and unmatched rows stay countable.
 
 ## Load order
 
@@ -102,7 +102,7 @@ Dimensions load before facts because facts resolve dimension surrogate keys by l
 
 ```
 1. gold.dim_date                      (generate / extend)
-2. Seed -1 Unknown member in every dimension (first run only)
+2. Seed -1 Not Provided member in every dimension (first run only)
 3. gold.dim_payment_type              (Type 1)
 4. gold.dim_payment_method            (Type 2)
 5. gold.dim_product                   (Type 2)

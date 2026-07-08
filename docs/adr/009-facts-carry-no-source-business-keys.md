@@ -42,6 +42,6 @@ The question was whether that omission breaks loading. It was challenged during 
 
 ## Related
 
-- ADR-007 (the reload strategies this enables), ADR-011 (Unknown members for failed key lookups)
+- ADR-007 (the reload strategies this enables), ADR-011 (Not Provided members for failed key lookups)
 - `docs/load_strategy/gold_load_strategy.md` §"Why the facts carry no source business keys"
 - `docs/architecture/Gold Schema.pdf` — fact column definitions

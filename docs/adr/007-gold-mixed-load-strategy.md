@@ -30,7 +30,7 @@ The choice per table was driven by two signals already fixed in the gold specs: 
 | `fact_payments` | payment | **Insert + second pass** resolving the self-referencing `parent_payment_key` (refund → original) via `(invoice_key, payment_sequence_num)` |
 | `fact_customer_behavior_snapshot` | customer × snapshot date | **Periodic snapshot, append-only**: prior snapshot dates are immutable history |
 
-**Load order:** `dim_date` → seed `-1` Unknown members (ADR-011) → Type 1/2 dimensions → facts → snapshot. Dimensions load first because facts resolve surrogate keys against current (`is_current = TRUE`) dimension versions. Every gold load logs a batch to `audit.etl_batch_control` (ADR-008) with no watermark — silver is already current.
+**Load order:** `dim_date` → seed `-1` Not Provided members (ADR-011) → Type 1/2 dimensions → facts → snapshot. Dimensions load first because facts resolve surrogate keys against current (`is_current = TRUE`) dimension versions. Every gold load logs a batch to `audit.etl_batch_control` (ADR-008) with no watermark — silver is already current.
 
 ## Alternatives considered
 
@@ -44,7 +44,7 @@ The choice per table was driven by two signals already fixed in the gold specs: 
 
 - History accrues exactly where the specs put it: versioned dimensions, immutable measurements.
 - Each fact reloads at the grain the business actually changes (an invoice, a payment, a snapshot day) — corrections are natural, no orphaned partial states.
-- The `-1` Unknown member + current-version key resolution keep fact loads total: no fact row is ever dropped for a missing dimension.
+- The `-1` Not Provided member + current-version key resolution keep fact loads total: no fact row is ever dropped for a missing dimension.
 
 **Negative / accepted costs**
 
@@ -54,5 +54,5 @@ The choice per table was driven by two signals already fixed in the gold specs: 
 
 ## Related
 
-- ADR-006 (silver — the input and the fidelity bound), ADR-009 (why facts carry no source keys), ADR-011 (Unknown members), ADR-008 (batch logging)
+- ADR-006 (silver — the input and the fidelity bound), ADR-009 (why facts carry no source keys), ADR-011 (Not Provided members), ADR-008 (batch logging)
 - `docs/load_strategy/gold_load_strategy.md` — full mechanics, SQL sketches, and the 13-step load order

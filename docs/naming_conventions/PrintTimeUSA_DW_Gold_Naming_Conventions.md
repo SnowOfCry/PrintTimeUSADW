@@ -147,8 +147,8 @@ Every dimension and fact carries the following standard blocks **after** its bus
 ### 5.6 Default value conventions
 | Situation | Convention |
 |---|---|
-| Unknown / missing text attribute | `'Unknown'` |
-| Unknown / missing dimension key (fact → dim) | `-1` (the "Unknown" dimension member) |
+| Missing text attribute | `'Not Provided'` |
+| Missing dimension key (fact → dim) | `-1` (the "Not Provided" member — Kimball's "unknown member" pattern) |
 | `is_current` default | `TRUE` |
 | `row_version` default | `1` |
 | `is_deleted`, `is_validated`, `dq_issue_flag` defaults | `FALSE` |

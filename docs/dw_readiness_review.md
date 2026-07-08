@@ -45,7 +45,7 @@ The OLTP source (`docs/architecture/Final OLTP.pdf`, 23 tables) and the bronze d
 Per `docs/source_to_dw_mapping/Silver_to_Gold_mapping.md` and `sql/gold/002_create_gold_tables.sql`, every Gold column traces to silver except the standard generated blocks (surrogate keys, `record_hash`, SCD2/DQ/audit). Two exceptions:
 
 - **`gold.dim_date` has no generator.** It is "generated calendar", but there is **no seed, dbt macro, or SQL** in the repo to populate it. Until it exists, `dim_date`, the three `vw_*_date` views, `dim_customer.first_order_date_key`, and every fact `*_date_key` cannot be populated. **Gap (blocker for gold).**
-- **`gold.dim_customer.customer_county` has no source.** Confirmed at the column level: OLTP `customer_address` and `bronze.oltp_customer_address` contain `street_address`, `street_address2`, `city`, `state_code`, `zip_code` — **no county column**. (Note: the `bronze.oltp_customer_address` table comment misleadingly claims "street/city/state/**county** enrichment", but no such column exists.) **Known gap** — defaults to `'Unknown'`.
+- **`gold.dim_customer.customer_county` has no source.** Confirmed at the column level: OLTP `customer_address` and `bronze.oltp_customer_address` contain `street_address`, `street_address2`, `city`, `state_code`, `zip_code` — **no county column**. (Note: the `bronze.oltp_customer_address` table comment misleadingly claims "street/city/state/**county** enrichment", but no such column exists.) **Known gap** — defaults to `'Not Provided'`.
 
 No transformation SQL/dbt models exist for gold either (only DDL + this review's recommended strategy).
 
@@ -62,12 +62,12 @@ No transformation SQL/dbt models exist for gold either (only DDL + this review's
 | Issue type | Findings |
 |---|---|
 | Missing from mapping | **None.** Every gold column appears. |
-| Mapped from a non-existent source | **1 — `dim_customer.customer_county`** (no county in OLTP/bronze/silver). Correctly flagged in the mapping as a gap defaulting to `'Unknown'`. |
+| Mapped from a non-existent source | **1 — `dim_customer.customer_county`** (no county in OLTP/bronze/silver). Correctly flagged in the mapping as a gap defaulting to `'Not Provided'`. |
 | Type-mismatch / narrowing | **Amounts narrow silver→gold:** silver money is `NUMERIC(18,2)` (e.g. `silver_total_amount`, `silver_payment_amount`); gold uses `NUMERIC(12,2)` (`invoice_total`, `payment_amount`, `sales_amount`, …). Safe for this business (invoice values ≪ 10¹⁰) but it is a real precision reduction — overflow would error on load if any amount ≥ 10¹⁰. `lifetime_sales_amount`/`open_invoice_total` use `NUMERIC(14,2)` (good). |
 | Ambiguous mapping | **`dim_product.department_number/description`** can resolve via two paths (`product.department_id` directly, or `product.category_id → product_category.department_id`). Mapping uses `product.department_id` — fine, but the two paths can disagree if source data is inconsistent; pick one and enforce. Minor. |
 | Rename chains to verify | `payment_amount` ← `silver_payment_amount` ← `bronze.oltp_payment.gross_amount`. Traceable but the `gross_amount → payment_amount` rename should be explicit in the silver dictionary. |
 
-**Can the mapping guarantee a fully-loadable Gold layer?** **Almost — with two caveats.** Every gold column has a defined rule, so an implementer has no ambiguity *except*: (1) `customer_county` (no source → `'Unknown'`), and (2) `dim_date` requires a generator the mapping assumes but the repo doesn't provide. With those two handled, the mapping is complete enough to load Gold fully.
+**Can the mapping guarantee a fully-loadable Gold layer?** **Almost — with two caveats.** Every gold column has a defined rule, so an implementer has no ambiguity *except*: (1) `customer_county` (no source → `'Not Provided'`), and (2) `dim_date` requires a generator the mapping assumes but the repo doesn't provide. With those two handled, the mapping is complete enough to load Gold fully.
 
 ---
 
@@ -77,7 +77,7 @@ No transformation SQL/dbt models exist for gold either (only DDL + this review's
 |---|---|
 | **DDL ↔ data dictionary drift (gold)** | ✅ No drift. All 11 gold tables match column-for-column (`docs/data_dictionary/gold_data_dictionary.md` ↔ `sql/gold/002`). |
 | **Surrogate-key / natural-key integrity** | ✅ Every dim/fact has an identity `*_key` PK; natural keys are `_id`/`_code`/`_number` and not the PK. `dim_date.date_key` is correctly a `YYYYMMDD` smart key (not identity) so facts/views can derive it. |
-| **Fact → dimension FK coverage** | ✅ Every fact key has a target dimension. `fact_retail_sales` (6 dims + degenerate `invoice_number`), `fact_payments` (8 incl. self-ref `parent_payment_key`), `fact_customer_behavior_snapshot` (3, via `dim_date` roles). FKs are **not enforced** (indexes only) — by design; relies on the `-1` Unknown member. |
+| **Fact → dimension FK coverage** | ✅ Every fact key has a target dimension. `fact_retail_sales` (6 dims + degenerate `invoice_number`), `fact_payments` (8 incl. self-ref `parent_payment_key`), `fact_customer_behavior_snapshot` (3, via `dim_date` roles). FKs are **not enforced** (indexes only) — by design; relies on the `-1` Not Provided member. |
 | **Role-playing date views** | ✅ `vw_first_order_date`, `vw_snapshot_date`, `vw_last_order_date` each re-label `gold.dim_date`. Clean for BI (each view is its own date table). |
 | **`record_hash` algorithm (SHA-256 vs MD5)** | ⚠️ Cosmetic only. Gold `record_hash CHAR(64)` = SHA-256; bronze/silver `*_row_hash TEXT` = MD5 (per load-strategy notes). Each layer hashes its **own** values for its **own** change detection and **never compares across layers**, so the mismatch causes **no functional problem**. `CHAR(64)` exactly fits SHA-256 hex; a 32-char MD5 fed there would space-pad, but gold computes its own SHA-256, so this won't happen. Recommend a one-line note in the naming doc (already present). |
 | **Control/audit table naming** | ✅ **RESOLVED (Option A).** Standardized on `audit.etl_batch_control` (+ `audit.audit_log`). The `control` schema was dropped, the Docker init now bootstraps the audit tables (`002_create_audit_tables.sql`), the bronze comments/docs were repointed `control.`→`audit.`, and the ingestion (`batch_control.py`, `watermark.py`, `main.py`) writes/reads it. `bronze_batch_id` (BIGINT) joins `audit.etl_batch_control.batch_key`. |
@@ -88,7 +88,7 @@ No transformation SQL/dbt models exist for gold either (only DDL + this review's
 
 ## 4. BI readiness (Power BI / Tableau)
 
-**Overall: the gold star schema is BI-friendly and close to drop-in for an import semantic model — once it's populated and the Unknown members are seeded.**
+**Overall: the gold star schema is BI-friendly and close to drop-in for an import semantic model — once it's populated and the Not Provided members are seeded.**
 
 | Dimension of readiness | Assessment |
 |---|---|
@@ -96,12 +96,12 @@ No transformation SQL/dbt models exist for gold either (only DDL + this review's
 | **Surrogate keys** | ✅ Integer identity keys → efficient, stable relationships. |
 | **Grain clarity** | ✅ Clear and distinct: `fact_retail_sales` = one invoice line; `fact_payments` = one payment; `fact_customer_behavior_snapshot` = one customer × snapshot date. |
 | **Degenerate dimension** | ✅ `invoice_number` carried on `fact_retail_sales` (no junk dimension needed). |
-| **Unknown / `-1` member** | ❌ **Not seeded anywhere.** No script inserts the `-1` Unknown row into each dimension. With unenforced FKs, unmatched fact keys will surface as blanks/limited relationships in Power BI ("blank row"). **Must seed a `-1` member per dimension.** |
+| **`-1` "Not Provided" member** | ❌ **Not seeded anywhere.** No script inserts the `-1` Not Provided row into each dimension. With unenforced FKs, unmatched fact keys will surface as blanks/limited relationships in Power BI ("blank row"). **Must seed a `-1` member per dimension.** |
 | **Additive vs non-additive** | `fact_retail_sales` (`sales_qty`, `sales_amount`, `sales_cost`, `gross_profit`) = **fully additive** ✅. `fact_payments` (`payment_amount`, `tax_amount`, `fee_amount`, `net_amount`) = additive, **but** refunds chained via `parent_payment_key` risk double counting unless refunds are signed-negative or excluded — define the sign convention. `fact_customer_behavior_snapshot` = **non-additive across `snapshot_date`** (`lifetime_*`, `open_invoice_*`, `avg_days_to_full_payment`, `*_count` are point-in-time). BI must aggregate these with "last value in period"/AVERAGE, **never SUM across dates** — call this out in the model or users will write wrong measures. |
 | **Date dimension + role-playing** | ✅ `dim_date` + 3 views = standard Power BI role-playing (separate date tables) → avoids `USERELATIONSHIP`/inactive-relationship DAX. Mark `dim_date` as the model Date table; ensure it is **contiguous/gap-free** (depends on the missing generator). |
-| **Modeling friction / awkward DAX-LOD** | (1) `dim_date.date` is a reserved word → needs quoting in some SQL/DAX contexts (minor). (2) Non-additive snapshot measures (above) are the main trap. (3) No Unknown member → blank-row handling. (4) `is_active`/indicators stored as `'Yes'/'No'` text are fine as slicers but can't be summed; expose a numeric companion if a % active KPI is needed. |
+| **Modeling friction / awkward DAX-LOD** | (1) `dim_date.date` is a reserved word → needs quoting in some SQL/DAX contexts (minor). (2) Non-additive snapshot measures (above) are the main trap. (3) No Not Provided member → blank-row handling. (4) `is_active`/indicators stored as `'Yes'/'No'` text are fine as slicers but can't be summed; expose a numeric companion if a % active KPI is needed. |
 
-No structural blocker forces awkward DAX **beyond** the non-additive snapshot handling and the missing Unknown member — both are normal, well-understood patterns once flagged.
+No structural blocker forces awkward DAX **beyond** the non-additive snapshot handling and the missing Not Provided member — both are normal, well-understood patterns once flagged.
 
 ---
 
@@ -124,7 +124,7 @@ No structural blocker forces awkward DAX **beyond** the non-additive snapshot ha
 | `dim_product` | **SCD Type 2** | Price/markup/category changes must be point-in-time for margin analysis; has SCD2 columns. |
 | `dim_store` | **SCD Type 2** | Region/type/name changes matter for trend continuity; has SCD2 columns. |
 | `dim_cashier` | **SCD Type 2** | Store reassignment / active-status changes need history; has SCD2 columns. |
-| `dim_customer` | **SCD Type 2** | Address/name/status change over time; has SCD2 columns. (county stays `'Unknown'`.) |
+| `dim_customer` | **SCD Type 2** | Address/name/status change over time; has SCD2 columns. (county stays `'Not Provided'`.) |
 | `dim_invoice` | **SCD Type 2** (on status/total) | OPEN→PARTIAL→PAID transitions are a stated core requirement; has SCD2 columns. |
 | `fact_retail_sales` | **Incremental append** by grain (new/changed `silver.invoice_line`); restate on line edits | Lines are effectively immutable once invoiced; append keeps it simple. |
 | `fact_payments` | **Incremental append**, then **2nd pass** to resolve `parent_payment_key` | One row per payment; the self-referencing refund/original link needs all rows present first. |
@@ -135,7 +135,7 @@ No structural blocker forces awkward DAX **beyond** the non-additive snapshot ha
 ```
 1. dim_date  (generator)
 2. dim_payment_type → dim_payment_method → dim_product → dim_store → dim_cashier → dim_customer → dim_invoice
-   (seed the -1 Unknown member in each dimension here)
+   (seed the -1 Not Provided member in each dimension here)
 3. fact_retail_sales
 4. fact_payments        (pass 1: insert rows)
 5. fact_payments        (pass 2: update parent_payment_key via self-join)
@@ -156,11 +156,11 @@ Dimensions before facts (facts resolve surrogate keys by lookup); `dim_date` fir
 2. **Stop `full_load`→`replace` in bronze.** Change the loader so bronze is append-only (full *snapshot append* for static refs), per `bronze_incremental_append_strategy.md`. `if_exists="replace"` destroys history and the typed DDL.
 3. **Build the transformation logic that doesn't exist yet:** bronze→silver merge SQL/dbt models, and silver→gold dim/fact loads (per §5). Today only DDL exists; no `.sql`/dbt models populate silver or gold.
 4. **Add a `dim_date` generator** (seed or dbt macro) producing a gap-free calendar with `YYYYMMDD` `date_key`; without it gold dates and all `*_date_key`s cannot load.
-5. **Seed the `-1` "Unknown" member** in every dimension so unmatched fact keys (unenforced FKs) don't become BI blank rows.
+5. **Seed the `-1` "Not Provided" member** in every dimension so unmatched fact keys (unenforced FKs) don't become BI blank rows.
 
 ### High-value fixes (decisions/correctness)
 
-6. **Resolve `dim_customer.customer_county`:** either add a `ZIP → county` reference (true fix) or formally accept `'Unknown'`. Also correct the misleading "county" claim in the `bronze.oltp_customer_address` table comment.
+6. **Resolve `dim_customer.customer_county`:** either add a `ZIP → county` reference (true fix) or formally accept `'Not Provided'`. Also correct the misleading "county" claim in the `bronze.oltp_customer_address` table comment.
 7. ✅ **DONE — Unified the control/audit table identity** on `audit.etl_batch_control` (+ `audit.audit_log`); dropped the `control` schema; wired batch logging + watermark read into the pipeline.
 8. **Define the `fact_payments` refund sign convention** (`parent_payment_key` chain) so payment measures stay additive in BI without double counting.
 9. **Document the non-additive snapshot measures** in `fact_customer_behavior_snapshot` (aggregate as last/avg, never SUM across `snapshot_date`).

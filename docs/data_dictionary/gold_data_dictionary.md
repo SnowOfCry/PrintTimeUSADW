@@ -119,7 +119,7 @@ Tables: 8 dimensions + 3 facts (+ 3 role-playing date views over `dim_date`).
 | customer_name | VARCHAR(100) | NULL | — | Display name. | attribute |
 | customer_street_address | VARCHAR(200) | NULL | — | Primary street address (lookup). | attribute |
 | customer_city | VARCHAR(100) | NULL | — | City (lookup). | attribute |
-| customer_county | VARCHAR(100) | NULL | — | County. **No source — defaults to 'Unknown' (gap).** | attribute |
+| customer_county | VARCHAR(100) | NULL | — | County. **No source — defaults to 'Not Provided' (gap).** | attribute |
 | customer_state | VARCHAR(50) | NULL | — | State name (lookup). | attribute |
 | customer_city_state | VARCHAR(150) | NULL | — | "City, ST" derived label. | attribute |
 | first_order_date_key | INTEGER | NULL | — | Role-playing FK to dim_date (first order). | natural key |

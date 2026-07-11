@@ -22,29 +22,62 @@ sources:
     # loaded_at_field: _loaded_at
 
     tables:
-      # ── Placeholder: replace with your real OLTP tables ──────────────────
-      - name: raw_orders
-        description: "Raw orders extracted from the OLTP source."
+      # ── Placeholder: OLTP tables ──────────────────
+      - name: ref_state
+        description: "ref_state table wich contains the states. extracted from the OLTP source."
         # loaded_at_field: _loaded_at
         columns:
-          - name: order_id
-            description: "Natural key from OLTP source."
-            tests:
-              - not_null
-          # Add more columns and tests as you define the real table
-
-      - name: raw_customers
-        description: "Raw customer records extracted from the OLTP source."
-        columns:
-          - name: customer_id
-            description: "Natural key from OLTP source."
+          - name: state_code
+            description: "Two-letter state code (natural key)."
             tests:
               - not_null
 
-      - name: raw_products
-        description: "Raw product records extracted from the OLTP source."
-        columns:
-          - name: product_id
-            description: "Natural key from OLTP source."
+          - name: state_name
+            description: "Full state name."
             tests:
               - not_null
+
+          - name: bronze_record_id
+            description: "Technical surrogate primary key for the Bronze row. Append-only; the source id may repeat across batches"
+            tests:
+              - not_null
+
+
+
+          - name: bronze_batch_id
+            description: "Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key."
+            tests:
+              - not_null
+
+          - name: bronze_loaded_at_timestamp
+            description: "Timestamp when the row was written into Bronze (load time)."
+            tests:
+              - not_null
+
+          - name: bronze_source_system
+            description: "Source system identifier (e.g. oltp, 4over_csv, manual_file, reference)."
+            tests:
+              - not_null
+              
+
+          - name: bronze_row_hash
+            description: "Deterministic hash of the business column values, used to detect changed rows across batches."
+            tests:
+              - not_null
+
+          - name: bronze_is_deleted_flag
+            description: "Marks a row that the source reports as deleted (soft-delete capture); does not remove the Bronze row."
+            tests:
+              - not_null
+
+          - name: bronze_raw_payload_jsonb
+            description: "Full raw source row stored as JSONB for complete traceability back to the exact extracted record."
+
+      - name: oltp_product
+        description: "Raw product records from the OLTP source (append-only)."
+            
+              
+
+          
+         
+      

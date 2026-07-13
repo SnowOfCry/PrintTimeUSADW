@@ -8,9 +8,19 @@
 --         ADR-005 (cleaning standards), ADR-006 (dedup to one current row/key)
 --         docs/load_strategy/silver_incremental_merge_strategy.md (dedup order)
 -- =============================================================================
+{{ config(
+    materialized='incremental',
+    unique_key='silver_state_code',
+    incremental_strategy='merge',
+    merge_exclude_columns=['silver_created_at_timestamp'],
+    on_schema_change='fail'
+) }}
 
 with source as (
     select * from {{ source('bronze', 'ref_state') }}
+    {% if is_incremental() %}
+        where bronze_batch_id > (select coalesce(max(silver_bronze_batch_id), 0) from {{ this }})
+    {% endif %}
 ),
 
 -- Collapse bronze's append-only history to the latest row per business key.
@@ -70,4 +80,12 @@ final as (
     from cleaned
 )
 
-select * from final
+select f.* 
+from final f
+{% if is_incremental() %}
+left join {{ this }} existing
+    on existing.silver_state_code = f.silver_state_code
+where existing.silver_state_code is null                       -- new key → insert
+   or existing.silver_row_hash is distinct from f.silver_row_hash  -- changed → update
+{% endif %}
+

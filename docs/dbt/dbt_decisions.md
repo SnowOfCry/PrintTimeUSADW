@@ -90,6 +90,114 @@ constraints instead of `CREATE TABLE AS SELECT`, so the database enforces the sp
 
 **Proof in repo:** `dbt/printtime_dw/models/silver/_silver_models.yml`
 
+## Lesson 5 — Deduplication with `ROW_NUMBER()`
+
+**Concept:** bronze is append-only (ADR-004), so one business key can have many bronze rows.
+Silver keeps exactly one current row per key (ADR-006 step 2), collapsed with a window
+function.
+
+- Added a `deduped` CTE ahead of `cleaned`: `row_number() over (partition by <business key>
+  order by <freshness>)`, then `where rn = 1`.
+- **Freshness order is the project standard** (`silver_incremental_merge_strategy.md`), the
+  same for every table: `updated_at_source_timestamp desc nulls last, created_at_source_timestamp
+  desc nulls last, bronze_loaded_at_timestamp desc, bronze_record_id desc`. The final
+  `bronze_record_id` (monotonic) guarantees a deterministic winner — no random ties.
+- **Decision corrected against spec:** an earlier draft ordered product by `source_row_version`;
+  the documented rule standardizes on `updated_at_source_timestamp` (present on every table),
+  so the spec won. Rule of thumb reaffirmed: **the project spec is the source of truth.**
+- `partition by` uses the **raw bronze key** (`product_id`), not the silver alias — the window
+  runs before the `cleaned` rename.
+- Applied to `state.sql` (defensively — a reload could dup) and `product.sql`.
+
+**Proved end-to-end (not just asserted):** injected 3 updated copies of products 1–3 into
+`bronze.oltp_product` (new `bronze_record_id`, later `updated_at`, prices 888.88/999.99,
+test batch 999999) → bronze 1003 rows / 1000 keys. Re-ran `product`:
+- silver stayed **1000 rows / 1000 keys** — duplicates collapsed;
+- products 1–3 showed the **new** prices + **new** hashes — the latest version won;
+- `INSERT 0 1000` held — the PK contract would have rejected a broken dedup (two rows/key).
+Then deleted batch 999999 and rebuilt to restore true seeded values.
+
+**Why dedup matters even on clean data:** it is a no-op today (one load, no dupes) but the
+next incremental append *will* create dupes; without it, the second load violates the PK
+contract. Dedup upgrades a model from works-once to works-always.
+
+**Proof in repo:** `dbt/printtime_dw/models/silver/state.sql`, `product.sql`
+
+## Lesson 6 — Incremental materialization (the real ADR-006 merge)
+
+**Concept:** `materialized: table` fully rebuilds every run — correct rows, but it resets
+`silver_created_at_timestamp`/`silver_updated_at_timestamp` on every row every time, so the
+temporal metadata lies (ADR-006 rejected this as alternative #2). `materialized: incremental`
+builds once, then processes only new/changed rows.
+
+Converted `state.sql` with a `config()` block:
+
+```sql
+{{ config(
+    materialized='incremental',
+    unique_key='silver_state_code',
+    incremental_strategy='merge',
+    merge_exclude_columns=['silver_created_at_timestamp'],
+    on_schema_change='fail'
+) }}
+```
+
+- **Watermark (ADR-006 step 1)** — an `{% if is_incremental() %}` block filters the source:
+  `where bronze_batch_id > (select coalesce(max(silver_bronze_batch_id), 0) from {{ this }})`.
+  `{{ this }}` is the model's own table; `is_incremental()` is false on the first run / on
+  `--full-refresh` (so the filter vanishes and it full-builds), true thereafter.
+- **Merge (step 3)** — `unique_key` + `incremental_strategy='merge'` compile to
+  `INSERT ... ON CONFLICT (silver_state_code) DO UPDATE`: new keys insert, existing keys
+  update. The **contract PK is what makes `ON CONFLICT` work** — contracts + incremental pair
+  by design.
+- **Two timestamps (step 4)** — `merge_exclude_columns=['silver_created_at_timestamp']`
+  keeps `created` frozen on update while everything else (incl. `updated`) refreshes.
+- **Contract quirk learned from the error:** incremental + contract forbids the default
+  `on_schema_change='ignore'`; must be `'fail'` or `'append_new_columns'`. Chose `fail` —
+  the DDL contract fixes the schema, so any drift should be a loud error.
+
+**Proved (state, live):** full-refresh built at batch 60 (`incremental model`, both ts equal).
+Injected an updated CA at batch 999999, ran without `--full-refresh` → log showed `MERGE 1`;
+CA name changed, `created` stayed 23:41:46, `updated` advanced to 23:44:00; AZ/TX **frozen**
+(watermark excluded them, batch 1 not > 1).
+
+## Lesson 6b — The hash gate (only update on genuine change)
+
+**Concept:** the watermark lets through every row in a new batch, including re-extracts whose
+data didn't change. Merging those would falsely bump `silver_updated_at_timestamp` — breaking
+the signal gold uses for SCD2 (ADR-007). ADR-006 step 3 requires updating only when
+`silver_row_hash IS DISTINCT FROM` the stored hash.
+
+Implemented as a filter in the final select (contract-safe: still `select f.*` = the declared
+columns; the joined table is only used for filtering):
+
+```sql
+select f.*
+from final f
+{% if is_incremental() %}
+left join {{ this }} existing
+    on existing.silver_state_code = f.silver_state_code
+where existing.silver_state_code is null                          -- new key  -> insert
+   or existing.silver_row_hash is distinct from f.silver_row_hash -- changed  -> update
+{% endif %}
+```
+
+- `IS DISTINCT FROM`, not `<>` — NULL-safe (`<>` returns NULL against NULLs and silently drops
+  rows).
+- Watermark and hash gate are complementary: watermark = "only new batches" (coarse,
+  efficient); hash gate = "only genuinely-changed rows" (fine).
+
+**Proved (state, live, two-part):**
+- **Identical re-load** (same business data, new batch 999999) → `MERGE 0`; CA `updated_at`
+  stayed frozen. No-op, exactly as intended.
+- **Genuine change** (new name) → `MERGE 1`; `updated_at` advanced, `created_at` preserved,
+  AZ/TX untouched. Same watermark, opposite outcome — decided solely by the hash.
+
+`silver.state` is now the complete ADR-006 reference model: watermark + dedup + hash-gated
+merge + honest timestamps + enforced contract.
+
+**Proof in repo:** `dbt/printtime_dw/models/silver/state.sql`
+
 ---
 
 ## Concept quick-reference
@@ -106,13 +214,21 @@ constraints instead of `CREATE TABLE AS SELECT`, so the database enforces the sp
 | dbt vars | `{{ var('x', default) }}` runtime value | Lesson 3 |
 | Model contract | build-time enforcement of types + constraints | Lesson 4 |
 | CTAS vs declare-then-insert | `SELECT n` vs `INSERT 0 n` in the log | Lesson 4 |
+| Deduplication | `ROW_NUMBER()` + `where rn = 1` → one current row/key | Lesson 5 |
+| Deterministic freshness order | tie-break on monotonic `bronze_record_id` | Lesson 5 |
+| Incremental materialization | build once, then process only new/changed rows | Lesson 6 |
+| `is_incremental()` + `{{ this }}` | watermark: read model's own table for max batch | Lesson 6 |
+| `merge` + `unique_key` | `ON CONFLICT DO UPDATE`; insert new, update existing | Lesson 6 |
+| `merge_exclude_columns` | preserve `created` on update; advance `updated` | Lesson 6 |
+| `on_schema_change='fail'` | required by incremental + contract; loud on drift | Lesson 6 |
+| Hash gate | `IS DISTINCT FROM` in final select → update only on real change | Lesson 6b |
 
 ---
 
 ## Next up
 
-- **Deduplication** with `ROW_NUMBER()` — collapse bronze's append-only history to one
-  current row per business key (needed for `customer`, `product`, etc.).
-- **Incremental materialization** — turn full-rebuild models into the `incremental_merge`
-  the load strategy specifies.
+- **Apply incremental to `product`** — copy the `state` template: config block
+  (`unique_key='silver_product_id'`), watermark, and hash gate (join on
+  `silver_product_id`).
 - **Data tests** — `unique`/`not_null` as dbt tests alongside the contract constraints.
+- **Remaining 18 silver models** — apply the established pattern.

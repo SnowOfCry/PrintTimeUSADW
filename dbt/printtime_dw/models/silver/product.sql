@@ -1,5 +1,16 @@
+{{ config(
+    materialized='incremental',
+    unique_key='silver_product_id',
+    incremental_strategy='merge',
+    merge_exclude_columns=['silver_created_at_timestamp'],
+    on_schema_change='fail'
+) }}
+
 with source as(
     select * from {{ source('bronze', 'oltp_product')}}
+    {% if is_incremental() %}
+        where bronze_batch_id > (select coalesce(max(silver_bronze_batch_id), 0) from {{ this }})
+    {% endif %}
 ),
 
 deduped as(
@@ -65,4 +76,11 @@ final as(
     from cleaned
 )
 
-select * from final
+select f.* 
+from final f
+{% if is_incremental() %}
+left join {{ this }} existing
+    on existing.silver_product_id = f.silver_product_id
+where existing.silver_product_id is null                       -- new key → insert
+   or existing.silver_row_hash is distinct from f.silver_row_hash  -- changed → update
+{% endif %}

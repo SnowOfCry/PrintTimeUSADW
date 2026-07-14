@@ -42,8 +42,6 @@ sources:
             tests:
               - not_null
 
-
-
           - name: bronze_batch_id
             description: "Identifies the ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key."
             tests:

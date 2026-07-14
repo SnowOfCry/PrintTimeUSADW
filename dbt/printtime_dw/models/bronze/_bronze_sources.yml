@@ -73,6 +73,9 @@ sources:
 
       - name: oltp_product
         description: "Raw product records from the OLTP source (append-only)."
+      
+      - name: oltp_customer
+        description: "Raw customer records from the OLTP source (append-only)."
             
               
 

@@ -198,6 +198,54 @@ merge + honest timestamps + enforced contract.
 
 **Proof in repo:** `dbt/printtime_dw/models/silver/state.sql`
 
+## Lesson 7 — Normalization, controlled vocabularies, and derived columns (silver.customer)
+
+**Concept:** the first model beyond pure cast-and-clean. `customer` applies the three ADR-005
+standards that `state`/`product` didn't need: field normalization, controlled vocabularies,
+and derived business columns. Same incremental/contract machinery as before.
+
+**1. Field normalization** — make equal values become identical strings so the hash only
+changes on real change (and gold doesn't get phantom SCD2 versions):
+- **Collapse internal spaces** (distinct from dedup's "collapse rows"): `trim` removes only end
+  whitespace; `regexp_replace(x, '\s+', ' ', 'g')` squeezes internal runs to one space, so
+  `"Elite   Roofing"` and `"Elite Roofing"` hash the same.
+- **Person names** — Title Case: `initcap(nullif(regexp_replace(trim(x), '\s+', ' ', 'g'), ''))`.
+- **Business names** — same clean but **no `initcap`** (preserve case: `PepsiCo`, `LLC`, `AA`).
+- **Email** — `lower`: `nullif(trim(lower(email)), '')`.
+- **Phone** — strip non-digits: `nullif(regexp_replace(phone, '[^0-9]', '', 'g'), '')`. Decision:
+  keep whatever digits remain even if not 10 (non-destructive; silver keeps everything with
+  business meaning). All 10,000 rows stripped cleanly to 10 digits.
+
+**2. Controlled vocabulary (ADR-005 #4)** — write the closed set explicitly so junk can't leak:
+```sql
+case lower(trim(customer_status))
+    when 'active'   then 'active'
+    when 'inactive' then 'inactive'
+    else null                      -- outside the closed set
+end::varchar(20) as silver_customer_status
+```
+A bare `lower()` would pass any value through; the `case` enforces `{active, inactive, null}`.
+
+**3. Derived columns (ADR-005 #5)** — columns with no direct bronze source:
+- `silver_is_active_flag` — boolean expression: `(lower(trim(customer_status)) = 'active')::boolean`.
+- `silver_customer_name` — one `case`, two branches, **different casing per branch**:
+  business name if present (case preserved), else Title-Cased `concat_ws(' ', first, last)`.
+
+**Decision — customer_name rule kept as spec (business, else person).** The user proposed
+reversing to person-first; the data showed all 10,000 rows have a person name and 6,977 also
+have a business name, so person-first would make business_name never used and show every B2B
+customer as its contact person. Rejected — kept ADR-005 (business, else person). Reaffirms:
+spec is the source of truth; a change would have required updating ADR-005 + the validation doc.
+
+`full_name` in bronze is 100% empty, so `silver_customer_name` is built from first+last, not
+mapped from `full_name` — a decision driven by inspecting the data, not the mapping doc.
+
+**Proved (live):** built 10,000 rows; 6,977 customer_names from business / 3,023 from person
+(matches the split); 0 statuses outside the vocabulary; 0 phones not 10 digits; 8,271
+`is_active_flag = true` (matches the 8,271 ACTIVE rows). Contract enforced (4 NOT NULLs + PK).
+
+**Proof in repo:** `dbt/printtime_dw/models/silver/customer.sql`
+
 ---
 
 ## Concept quick-reference
@@ -222,13 +270,19 @@ merge + honest timestamps + enforced contract.
 | `merge_exclude_columns` | preserve `created` on update; advance `updated` | Lesson 6 |
 | `on_schema_change='fail'` | required by incremental + contract; loud on drift | Lesson 6 |
 | Hash gate | `IS DISTINCT FROM` in final select → update only on real change | Lesson 6b |
+| Space collapse | `regexp_replace(x, '\s+', ' ', 'g')` → identical strings, stable hash | Lesson 7 |
+| Title Case vs preserve | `initcap` for persons; keep source case for businesses | Lesson 7 |
+| Controlled vocabulary | explicit `case` maps to a closed set; junk → null | Lesson 7 |
+| Derived columns | computed in silver from other columns (no bronze source) | Lesson 7 |
 
 ---
 
 ## Next up
 
-- **Apply incremental to `product`** — copy the `state` template: config block
-  (`unique_key='silver_product_id'`), watermark, and hash gate (join on
-  `silver_product_id`).
+- **Remaining 17 silver models** — apply the established pattern. Done so far: `state`,
+  `product`, `customer`. Good next candidates: `invoice` (status vocabulary, feeds 3 gold
+  tables), or the simpler ref/lookup tables (`store`, `employee`, `payment_type`).
+- **The two history tables** (`invoice_status_history`, `customer_status_history`) are the
+  exception — one row per transition, never deduplicated.
 - **Data tests** — `unique`/`not_null` as dbt tests alongside the contract constraints.
-- **Remaining 18 silver models** — apply the established pattern.
+- **DRY** — a macro for the repeated lineage+metadata block; then wire dbt into the Airflow DAG.

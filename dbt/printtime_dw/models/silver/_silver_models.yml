@@ -2,13 +2,21 @@ version: 2
 
 # =============================================================================
 # _silver_models.yml
-# Documents and tests dbt silver-layer models.
-# Silver models clean, standardize, and deduplicate bronze source data.
-# Add one model block per .sql file you create in this folder.
+# dbt model contracts for the silver layer. Each contract enforces the exact
+# shape of sql/silver/002_create_silver_tables.sql: column names, data types,
+# NOT NULL constraints, and the primary key. Columns are listed in QUERY order
+# (the order the model's SELECT emits them), so silver_row_hash is always last.
+#
+# Every silver table shares the same NOT NULL set from the DDL spec:
+#   <business key>, silver_source_system, silver_batch_id,
+#   silver_created_at_timestamp, silver_updated_at_timestamp,
+#   silver_is_deleted_flag, silver_row_hash.
+# Add one model block per .sql file in this folder.
 # =============================================================================
 
 models:
 
+  # ── silver.state ───────────────────────────────────────────────────────────
   - name: state
     description: "Clean state lookup (CA, AZ, TX). Feeds gold.dim_customer and gold.dim_store."
     config:
@@ -28,19 +36,19 @@ models:
         data_type: varchar(100)
         constraints:
           - type: not_null
-      
+
       - name: silver_source_table_name
         data_type: varchar(150)
-      
+
       - name: silver_source_record_id
         data_type: text
-      
+
       - name: silver_source_created_at_timestamp
         data_type: timestamp
-      
+
       - name: silver_source_updated_at_timestamp
         data_type: timestamp
-      
+
       - name: silver_bronze_record_id
         data_type: bigint
 
@@ -51,21 +59,28 @@ models:
         data_type: bigint
         constraints:
           - type: not_null
-      
+
       - name: silver_created_at_timestamp
         data_type: timestamp
-      
+        constraints:
+          - type: not_null
+
       - name: silver_updated_at_timestamp
         data_type: timestamp
-        
+        constraints:
+          - type: not_null
+
       - name: silver_is_deleted_flag
         data_type: boolean
+        constraints:
+          - type: not_null
 
       - name: silver_row_hash
         data_type: text
         constraints:
           - type: not_null
 
+  # ── silver.product ─────────────────────────────────────────────────────────
   - name: product
     description: "Clean current version of each product. Feeds gold.dim_product and product attributes on fact_retail_sales."
     config:
@@ -107,30 +122,30 @@ models:
 
       - name: silver_is_local_made_flag
         data_type: boolean
-      
+
       - name: silver_is_active_flag
-        data_type: boolean  
-      
+        data_type: boolean
+
       - name: silver_source_system
         data_type: varchar(100)
         constraints:
           - type: not_null
-      
+
       - name: silver_source_table_name
-        data_type: varchar(150) 
+        data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text 
-      
+        data_type: text
+
       - name: silver_source_created_at_timestamp
-        data_type: timestamp 
-      
+        data_type: timestamp
+
       - name: silver_source_updated_at_timestamp
-        data_type: timestamp 
-      
+        data_type: timestamp
+
       - name: silver_bronze_record_id
-        data_type: bigint 
-      
+        data_type: bigint
+
       - name: silver_bronze_batch_id
         data_type: bigint
 
@@ -140,21 +155,28 @@ models:
           - type: not_null
 
       - name: silver_created_at_timestamp
-        data_type: timestamp 
-      
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
       - name: silver_updated_at_timestamp
-        data_type: timestamp  
-      
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
       - name: silver_is_deleted_flag
         data_type: boolean
+        constraints:
+          - type: not_null
 
       - name: silver_row_hash
         data_type: text
         constraints:
-          - type: not_null  
+          - type: not_null
 
+  # ── silver.customer ────────────────────────────────────────────────────────
   - name: customer
-    description: "Clean current version of each customer. Feeds gold.dim_customer"
+    description: "Clean current version of each customer. Feeds gold.dim_customer."
     config:
       contract:
         enforced: true
@@ -194,7 +216,7 @@ models:
 
       - name: silver_default_tax_rate_id
         data_type: bigint
-      
+
       - name: silver_home_store_id
         data_type: bigint
 
@@ -204,8 +226,8 @@ models:
       - name: silver_source_system
         data_type: varchar(100)
         constraints:
-          - type: not_null   
-      
+          - type: not_null
+
       - name: silver_source_table_name
         data_type: varchar(150)
 
@@ -228,15 +250,21 @@ models:
         data_type: bigint
         constraints:
           - type: not_null
-      
+
       - name: silver_created_at_timestamp
         data_type: timestamp
+        constraints:
+          - type: not_null
 
       - name: silver_updated_at_timestamp
         data_type: timestamp
-      
+        constraints:
+          - type: not_null
+
       - name: silver_is_deleted_flag
         data_type: boolean
+        constraints:
+          - type: not_null
 
       - name: silver_row_hash
         data_type: text
@@ -244,7 +272,6 @@ models:
           - type: not_null
 
   # ── silver.department ──────────────────────────────────────────────────────
-  # Clean department lookup (SIGNS, EMB, DTF, PRINT). Feeds gold.dim_product.
   - name: department
     description: "Clean department lookup (SIGNS, EMB, DTF, PRINT). Feeds gold.dim_product."
     config:
@@ -299,15 +326,96 @@ models:
 
       - name: silver_created_at_timestamp
         data_type: timestamp
+        constraints:
+          - type: not_null
 
       - name: silver_updated_at_timestamp
         data_type: timestamp
+        constraints:
+          - type: not_null
 
       - name: silver_is_deleted_flag
         data_type: boolean
+        constraints:
+          - type: not_null
 
       - name: silver_row_hash
         data_type: text
         constraints:
           - type: not_null
 
+  # ── silver.product_category ────────────────────────────────────────────────
+  - name: product_category
+    description: "Clean product-category lookup. Feeds gold.dim_product (category + department link)."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_category_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_department_id
+        data_type: bigint
+
+      - name: silver_category_code
+        data_type: varchar(40)
+
+      - name: silver_category_name
+        data_type: varchar(100)
+
+      - name: silver_category_description
+        data_type: varchar(200)
+
+      - name: silver_is_active_flag
+        data_type: boolean
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null

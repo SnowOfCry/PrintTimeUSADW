@@ -237,7 +237,75 @@ models:
       
       - name: silver_is_deleted_flag
         data_type: boolean
-      
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null
+
+  # ── silver.department ──────────────────────────────────────────────────────
+  # Clean department lookup (SIGNS, EMB, DTF, PRINT). Feeds gold.dim_product.
+  - name: department
+    description: "Clean department lookup (SIGNS, EMB, DTF, PRINT). Feeds gold.dim_product."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_department_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_department_code
+        data_type: varchar(20)
+
+      - name: silver_department_name
+        data_type: varchar(100)
+
+      - name: silver_department_description
+        data_type: varchar(200)
+
+      - name: silver_is_active_flag
+        data_type: boolean
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+
       - name: silver_row_hash
         data_type: text
         constraints:

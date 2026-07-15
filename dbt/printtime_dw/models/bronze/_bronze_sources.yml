@@ -76,6 +76,9 @@ sources:
       
       - name: oltp_customer
         description: "Raw customer records from the OLTP source (append-only)."
+
+      - name: oltp_department
+        description: "Raw department lookup records from the OLTP source (append-only)."
             
               
 

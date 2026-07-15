@@ -82,6 +82,12 @@ sources:
 
       - name: oltp_product_category
         description: "Raw product-category lookup records from the OLTP source (append-only)."
+
+      - name: oltp_employee
+        description: "Raw employee records from the OLTP source (append-only)."
+
+      - name: oltp_store
+        description: "Raw store/location records from the OLTP source (append-only)."
             
               
 

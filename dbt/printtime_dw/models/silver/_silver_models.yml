@@ -419,3 +419,188 @@ models:
         data_type: text
         constraints:
           - type: not_null
+
+  # ── silver.employee ────────────────────────────────────────────────────────
+  - name: employee
+    description: "Clean current version of each employee. Feeds gold.dim_cashier."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_employee_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_employee_code
+        data_type: varchar(30)
+
+      - name: silver_first_name
+        data_type: varchar(100)
+
+      - name: silver_last_name
+        data_type: varchar(100)
+
+      - name: silver_full_name
+        data_type: varchar(200)
+
+      - name: silver_email
+        data_type: varchar(255)
+
+      - name: silver_phone_number
+        data_type: varchar(50)
+
+      - name: silver_role
+        data_type: varchar(30)
+
+      - name: silver_store_id
+        data_type: bigint
+
+      - name: silver_hire_date
+        data_type: date
+
+      - name: silver_is_active_flag
+        data_type: boolean
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null
+
+  # ── silver.store ───────────────────────────────────────────────────────────
+  - name: store
+    description: "Clean current version of each store/location. Feeds gold.dim_store, dim_cashier, dim_invoice."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_store_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_store_code
+        data_type: varchar(30)
+
+      - name: silver_store_name
+        data_type: varchar(100)
+
+      - name: silver_street_address
+        data_type: varchar(200)
+
+      - name: silver_city
+        data_type: varchar(100)
+
+      - name: silver_state_code
+        data_type: varchar(2)
+
+      - name: silver_zip_code
+        data_type: varchar(10)
+
+      - name: silver_phone_number
+        data_type: varchar(50)
+
+      - name: silver_region
+        data_type: varchar(50)
+
+      - name: silver_store_type
+        data_type: varchar(50)
+
+      - name: silver_open_date
+        data_type: date
+
+      - name: silver_is_active_flag
+        data_type: boolean
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null

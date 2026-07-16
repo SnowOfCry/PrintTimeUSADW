@@ -106,6 +106,24 @@ sources:
 
       - name: oltp_payment
         description: "Raw payment records from the OLTP source (append-only)."
+
+      - name: oltp_invoice_line
+        description: "Raw invoice-line records from the OLTP source (append-only)."
+
+      - name: oltp_refund
+        description: "Raw refund records from the OLTP source (append-only)."
+
+      - name: oltp_invoice_adjustment
+        description: "Raw invoice-adjustment records from the OLTP source (append-only)."
+
+      - name: oltp_invoice_status_history
+        description: "Raw invoice status-transition log from the OLTP source (append-only, insert-only)."
+
+      - name: oltp_customer_status_history
+        description: "Raw customer status-transition log from the OLTP source (append-only, insert-only)."
+
+      - name: oltp_customer_address
+        description: "Raw customer-address records from the OLTP source (append-only)."
             
               
 

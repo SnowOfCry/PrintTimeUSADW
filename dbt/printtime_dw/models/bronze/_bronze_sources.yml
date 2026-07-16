@@ -103,6 +103,9 @@ sources:
 
       - name: ref_payment_status
         description: "Raw payment-status reference lookup (append-only)."
+
+      - name: oltp_payment
+        description: "Raw payment records from the OLTP source (append-only)."
             
               
 

@@ -604,3 +604,301 @@ models:
         data_type: text
         constraints:
           - type: not_null
+
+  # ── silver.payment_method ──────────────────────────────────────────────────
+  - name: payment_method
+    description: "Clean payment-method lookup. Feeds gold.dim_payment_method."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_payment_method_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_method_code
+        data_type: varchar(20)
+
+      - name: silver_method_name
+        data_type: varchar(50)
+
+      - name: silver_method_type
+        data_type: varchar(30)
+
+      - name: silver_is_card_flag
+        data_type: boolean
+
+      - name: silver_is_active_flag
+        data_type: boolean
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null
+
+  # ── silver.payment_type ────────────────────────────────────────────────────
+  - name: payment_type
+    description: "Clean payment-type lookup. Feeds gold.dim_payment_type."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_payment_type_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_type_code
+        data_type: varchar(20)
+
+      - name: silver_type_name
+        data_type: varchar(50)
+
+      - name: silver_type_description
+        data_type: varchar(200)
+
+      - name: silver_affects_balance_flag
+        data_type: boolean
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null
+
+  # ── silver.tax_rate ────────────────────────────────────────────────────────
+  - name: tax_rate
+    description: "Clean tax-rate lookup. Supports tax reconciliation for gold.dim_invoice and fact_payments."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_tax_rate_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_tax_code
+        data_type: varchar(20)
+
+      - name: silver_tax_description
+        data_type: varchar(100)
+
+      - name: silver_rate_pct
+        data_type: numeric(6,4)
+
+      - name: silver_effective_from_date
+        data_type: date
+
+      - name: silver_effective_to_date
+        data_type: date
+
+      - name: silver_is_active_flag
+        data_type: boolean
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null
+
+  # ── silver.invoice_status ──────────────────────────────────────────────────
+  - name: invoice_status
+    description: "Clean invoice-status lookup. Standardizes invoice status values for gold.dim_invoice."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_status_code
+        data_type: varchar(20)
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_status_name
+        data_type: varchar(50)
+
+      - name: silver_is_terminal_flag
+        data_type: boolean
+
+      - name: silver_sort_order
+        data_type: smallint
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null

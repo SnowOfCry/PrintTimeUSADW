@@ -88,6 +88,18 @@ sources:
 
       - name: oltp_store
         description: "Raw store/location records from the OLTP source (append-only)."
+
+      - name: ref_payment_method
+        description: "Raw payment-method reference lookup (append-only)."
+
+      - name: ref_payment_type
+        description: "Raw payment-type reference lookup (append-only)."
+
+      - name: ref_tax_rate
+        description: "Raw tax-rate reference lookup (append-only)."
+
+      - name: ref_invoice_status
+        description: "Raw invoice-status reference lookup (append-only)."
             
               
 

@@ -124,6 +124,9 @@ sources:
 
       - name: oltp_customer_address
         description: "Raw customer-address records from the OLTP source (append-only)."
+      
+      - name: oltp_invoice
+        description: "Raw invoice records from the OLTP source (append-only)."
             
               
 

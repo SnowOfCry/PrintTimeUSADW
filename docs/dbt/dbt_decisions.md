@@ -246,6 +246,46 @@ mapped from `full_name` — a decision driven by inspecting the data, not the ma
 
 **Proof in repo:** `dbt/printtime_dw/models/silver/customer.sql`
 
+## Lesson 8 — Completing the layer: transactional, history-tracked, and derived flags
+
+**Concept:** the remaining 17 models reuse the established template; three patterns were new.
+
+**1. History-tracked tables (ADR-006 exception)** — `invoice_status_history`,
+`customer_status_history` keep **one row per transition, never collapsed to "current"**
+(the timeline itself is the business record, feeding gold SCD2 / behavior snapshot). Adaptations:
+- business key is `status_history_id` (each transition its own row); dedup only guards against
+  re-extracts of the same transition.
+- the source is insert-only and has **no created/updated timestamps — only `changed_at`** — so
+  the freshness order and `silver_source_created/updated` both use `changed_at`.
+- `old_status`/`new_status` use the lowercase status vocabulary; `old_status` is legitimately
+  NULL on the first ("invoice created") transition.
+
+**2. Derived business flags with a fixed formula (ADR-005 #5)** — `silver.invoice` computes
+two flags from the **raw** amount columns (can't reference silver aliases in the same SELECT):
+- `silver_has_balance_due_flag = balance_due_amount > 0`
+- `silver_paid_in_full_flag = paid_amount >= total_amount`
+
+**Decision — `paid_in_full` uses `paid_amount >= total_amount`, not `balance_due_amount <= 0`.**
+The two differ only on VOID: a voided invoice closes with `balance <= 0` but `paid < total`, so
+`balance <= 0` would wrongly flag all 2,396 voids as "paid in full". `paid >= total` excludes
+them. Verified against all 59,950 invoices (paid → true; open/partial/void → false). ADR-005 #5
+named these flags but not their formulas; the formulas are now pinned in ADR-005's
+"Derived flag definitions" table, closing the "named but undefined" gap the spec-first skill
+exists to catch.
+
+**3. The dw-spec-first skill** — added `.claude/skills/dw-spec-first`, which requires reading
+the governing spec (ADR / DDL / dictionary / mapping / validation set) before writing, and makes
+the spec win over intuition. It caught a real violation on first use: `invoice_status` had been
+built with source-case codes (`OPEN`), violating ADR-005 #4's lowercase-vocabulary rule; fixed
+to `open/partial/paid/void`. Also drove a contract audit that found 3 NOT NULLs
+(`silver_created_at_timestamp`, `silver_updated_at_timestamp`, `silver_is_deleted_flag`) missing
+from every contract vs the DDL — added across all models, so every silver table now enforces its
+full 7 NOT NULLs.
+
+**Silver layer complete: 20/20 models, `dbt build --select silver` = PASS 20.**
+
+**Proof in repo:** `dbt/printtime_dw/models/silver/` (all 20), `.claude/skills/dw-spec-first/`
+
 ---
 
 ## Concept quick-reference
@@ -274,15 +314,22 @@ mapped from `full_name` — a decision driven by inspecting the data, not the ma
 | Title Case vs preserve | `initcap` for persons; keep source case for businesses | Lesson 7 |
 | Controlled vocabulary | explicit `case` maps to a closed set; junk → null | Lesson 7 |
 | Derived columns | computed in silver from other columns (no bronze source) | Lesson 7 |
+| History-tracked tables | one row per transition; `changed_at` ordering; never collapsed | Lesson 8 |
+| Derived flag formulas | fixed in ADR-005; `paid_in_full = paid >= total` (excludes void) | Lesson 8 |
+| Spec-first skill | read the governing spec before writing; spec wins | Lesson 8 |
 
 ---
 
+## Silver layer: DONE (20/20)
+
+All 20 silver models built, contract-enforced, spec-verified; `dbt build --select silver`
+passes 20/20 (models + contract tests).
+
 ## Next up
 
-- **Remaining 17 silver models** — apply the established pattern. Done so far: `state`,
-  `product`, `customer`. Good next candidates: `invoice` (status vocabulary, feeds 3 gold
-  tables), or the simpler ref/lookup tables (`store`, `employee`, `payment_type`).
-- **The two history tables** (`invoice_status_history`, `customer_status_history`) are the
-  exception — one row per transition, never deduplicated.
-- **Data tests** — `unique`/`not_null` as dbt tests alongside the contract constraints.
-- **DRY** — a macro for the repeated lineage+metadata block; then wire dbt into the Airflow DAG.
+- **Data tests** — `unique`/`not_null`/`relationships` as dbt tests alongside the contracts.
+- **DRY** — a macro for the repeated lineage+metadata block (and one for the hash).
+- **Regenerate the build guide** (`docs/dbt/PrintTimeUSA_dbt_Build_Guide.docx`) to reflect the
+  full layer.
+- **Wire dbt into the Airflow DAG** (Airflow passes the real `silver_batch_id`).
+- **Gold layer** — SCD2 dimensions + per-grain fact loads (ADR-007).

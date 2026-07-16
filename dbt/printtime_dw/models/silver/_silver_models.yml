@@ -1567,3 +1567,127 @@ models:
         data_type: text
         constraints:
           - type: not_null
+
+  # ── silver.invoice ─────────────────────────────────────────────────────────
+  - name: invoice
+    description: "Clean current state of each invoice (latest status). Feeds gold.dim_invoice, fact_retail_sales, fact_payments."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_invoice_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+
+      - name: silver_invoice_number
+        data_type: varchar(30)
+
+      - name: silver_customer_id
+        data_type: bigint
+
+      - name: silver_store_id
+        data_type: bigint
+
+      - name: silver_employee_id
+        data_type: bigint
+
+      - name: silver_billing_address_id
+        data_type: bigint
+
+      - name: silver_shipping_address_id
+        data_type: bigint
+
+      - name: silver_po_number
+        data_type: varchar(50)
+
+      - name: silver_invoice_date
+        data_type: date
+
+      - name: silver_invoice_due_date
+        data_type: date
+
+      - name: silver_invoice_status
+        data_type: varchar(20)
+
+      - name: silver_tax_rate_id
+        data_type: bigint
+
+      - name: silver_subtotal_amount
+        data_type: numeric(18,2)
+
+      - name: silver_discount_amount
+        data_type: numeric(18,2)
+
+      - name: silver_tax_amount
+        data_type: numeric(18,2)
+
+      - name: silver_fee_amount
+        data_type: numeric(18,2)
+
+      - name: silver_total_amount
+        data_type: numeric(18,2)
+
+      - name: silver_paid_amount
+        data_type: numeric(18,2)
+
+      - name: silver_balance_due_amount
+        data_type: numeric(18,2)
+
+      - name: silver_has_balance_due_flag
+        data_type: boolean
+
+      - name: silver_paid_in_full_flag
+        data_type: boolean
+
+      - name: silver_notes
+        data_type: varchar(1000)
+
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+
+      - name: silver_source_table_name
+        data_type: varchar(150)
+
+      - name: silver_source_record_id
+        data_type: text
+
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+
+      - name: silver_bronze_record_id
+        data_type: bigint
+
+      - name: silver_bronze_batch_id
+        data_type: bigint
+
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: silver_row_hash
+        data_type: text
+        constraints:
+          - type: not_null

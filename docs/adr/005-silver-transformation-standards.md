@@ -32,6 +32,18 @@ Every silver model applies this standard set, with the per-column specifics decl
 
 Business-value transformations beyond this set (aggregations, metrics, dimensional shaping) are **out of scope for silver** — they belong to gold.
 
+### Derived flag definitions (standard #5)
+
+Standard #5 names the reusable flags; their **formulas are fixed here** so every model computes them identically and the definition is written down rather than implied. Flags are derived from the *raw* source columns (they cannot reference the silver aliases defined in the same `SELECT`); the raw values are cast through unchanged, so the flag describes exactly the value stored.
+
+| Flag | Table(s) | Definition | Notes |
+|---|---|---|---|
+| `silver_is_active_flag` | customer | `lower(trim(customer_status)) = 'active'` | true only for `active`; derived from status (no source `is_active`) |
+| `silver_is_active_flag` | product, employee, store, department, product_category, payment_method, tax_rate | source `is_active_flag` (direct) | already boolean at source |
+| `silver_has_balance_due_flag` | invoice | `balance_due_amount > 0` | true for `open`/`partial`; false for `paid`/`void` |
+| `silver_paid_in_full_flag` | invoice | `paid_amount >= total_amount` | **excludes `void`** — a voided invoice closes with `balance <= 0` but `paid < total`, so it is not "paid in full". Chosen over `balance_due_amount <= 0`, which would wrongly flag the 2,396 voids as paid. Verified against all 59,950 invoices. |
+| `silver_customer_name` | customer | business name (case preserved) if present, else Title-Cased person name | person-vs-business split on `business_name` (see standard #2/#3) |
+
 ## Alternatives considered
 
 1. **Pass-through silver (types only, no cleansing).** Deferring normalization to gold. Rejected: every gold model (and every future one) would re-implement trimming/casing/status-mapping, guaranteeing drift between models — and hash-based change detection in silver would be built on unstable raw values.

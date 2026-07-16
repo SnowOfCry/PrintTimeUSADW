@@ -100,6 +100,9 @@ sources:
 
       - name: ref_invoice_status
         description: "Raw invoice-status reference lookup (append-only)."
+
+      - name: ref_payment_status
+        description: "Raw payment-status reference lookup (append-only)."
             
               
 

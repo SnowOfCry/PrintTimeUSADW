@@ -68,7 +68,7 @@ The guiding constraint comes from ADR-011: **never silently drop revenue.** A qu
 | One `is_current = TRUE` per natural key | all SCD2 dims | Must |
 | `accepted_values` on statuses/codes | silver + gold | Must |
 | Orphan check `invoice_line → invoice` | silver | Must |
-| Freshness within window | `audit.etl_batch_control` (needs the SLA — backlog #8) | Nice |
+| Freshness within window | bronze sources via `dbt source freshness`. **SLA (daily pipeline):** transactional `oltp_*` warn after 24h, error after 48h; reference `ref_*` exempt (change rarely). Configured in `_bronze_sources.yml`. | Nice |
 | "Not Provided" member rate below threshold | gold facts (`*_key = -1`) | Nice |
 
 ### New artifacts

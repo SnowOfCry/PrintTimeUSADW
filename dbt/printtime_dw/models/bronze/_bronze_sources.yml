@@ -15,17 +15,21 @@ sources:
     schema: bronze
     database: "{{ env_var('DBT_DATABASE', 'printtime_dw') }}"
 
-    # Source freshness checks (optional — enable once tables exist)
-    # freshness:
-    #   warn_after:  {count: 6,  period: hour}
-    #   error_after: {count: 24, period: hour}
-    # loaded_at_field: _loaded_at
+    # ── Freshness SLA (ADR-012 §4) ──────────────────────────────────────────
+    # Assumes a daily pipeline. This default applies to the transactional
+    # oltp_* sources (warn if no load in 24h, error at 48h). Reference ref_*
+    # lookups change rarely, so each is exempted below with `freshness: null`
+    # to avoid false alarms (ADR-012 "scope discipline": no crying wolf).
+    loaded_at_field: bronze_loaded_at_timestamp
+    freshness:
+      warn_after:  {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
 
     tables:
       # ── Placeholder: OLTP tables ──────────────────
       - name: ref_state
         description: "ref_state table wich contains the states. extracted from the OLTP source."
-        # loaded_at_field: _loaded_at
+        freshness: null      # reference lookup — changes rarely; exempt from the SLA
         columns:
           - name: state_code
             description: "Two-letter state code (natural key)."
@@ -91,18 +95,23 @@ sources:
 
       - name: ref_payment_method
         description: "Raw payment-method reference lookup (append-only)."
+        freshness: null      # reference lookup — changes rarely; exempt from the SLA
 
       - name: ref_payment_type
         description: "Raw payment-type reference lookup (append-only)."
+        freshness: null      # reference lookup — changes rarely; exempt from the SLA
 
       - name: ref_tax_rate
         description: "Raw tax-rate reference lookup (append-only)."
+        freshness: null      # reference lookup — changes rarely; exempt from the SLA
 
       - name: ref_invoice_status
         description: "Raw invoice-status reference lookup (append-only)."
+        freshness: null      # reference lookup — changes rarely; exempt from the SLA
 
       - name: ref_payment_status
         description: "Raw payment-status reference lookup (append-only)."
+        freshness: null      # reference lookup — changes rarely; exempt from the SLA
 
       - name: oltp_payment
         description: "Raw payment records from the OLTP source (append-only)."

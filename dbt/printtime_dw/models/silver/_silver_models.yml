@@ -29,6 +29,14 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              values:
+                - CA
+                - AZ
+                - TX
       - name: silver_state_name
         data_type: varchar(50)
 
@@ -93,6 +101,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_product_sku
         data_type: varchar(50)
 
@@ -105,9 +116,17 @@ models:
       - name: silver_department_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('department')
+              field: silver_department_id
       - name: silver_category_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('product_category')
+              field: silver_category_id
       - name: silver_brand_name
         data_type: varchar(100)
 
@@ -187,6 +206,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_customer_account_no
         data_type: varchar(30)
 
@@ -211,15 +233,28 @@ models:
       - name: silver_customer_status
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - active
+                - inactive
       - name: silver_is_active_flag
         data_type: boolean
 
       - name: silver_default_tax_rate_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('tax_rate')
+              field: silver_tax_rate_id
       - name: silver_home_store_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('store')
+              field: silver_store_id
       - name: silver_first_order_date
         data_type: date
 
@@ -284,6 +319,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_department_code
         data_type: varchar(20)
 
@@ -357,9 +395,16 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_department_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('department')
+              field: silver_department_id
       - name: silver_category_code
         data_type: varchar(40)
 
@@ -433,6 +478,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_employee_code
         data_type: varchar(30)
 
@@ -457,6 +505,10 @@ models:
       - name: silver_store_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('store')
+              field: silver_store_id
       - name: silver_hire_date
         data_type: date
 
@@ -524,6 +576,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_store_code
         data_type: varchar(30)
 
@@ -539,6 +594,10 @@ models:
       - name: silver_state_code
         data_type: varchar(2)
 
+        data_tests:
+          - relationships:
+              to: ref('state')
+              field: silver_state_code
       - name: silver_zip_code
         data_type: varchar(10)
 
@@ -618,6 +677,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_method_code
         data_type: varchar(20)
 
@@ -694,6 +756,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_type_code
         data_type: varchar(20)
 
@@ -767,6 +832,9 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_tax_code
         data_type: varchar(20)
 
@@ -846,6 +914,15 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              values:
+                - open
+                - partial
+                - paid
+                - void
       - name: silver_status_name
         data_type: varchar(50)
 
@@ -916,6 +993,16 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              values:
+                - pending
+                - cleared
+                - failed
+                - refunded
+                - void
       - name: silver_status_name
         data_type: varchar(50)
 
@@ -980,18 +1067,37 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_invoice_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('invoice')
+              field: silver_invoice_id
       - name: silver_customer_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('customer')
+              field: silver_customer_id
       - name: silver_payment_method_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('payment_method')
+              field: silver_payment_method_id
       - name: silver_payment_type_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('payment_type')
+              field: silver_payment_type_id
       - name: silver_employee_id
         data_type: bigint
 
@@ -1007,6 +1113,14 @@ models:
       - name: silver_payment_status
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - pending
+                - cleared
+                - failed
+                - refunded
+                - void
       - name: silver_payment_date
         data_type: date
 
@@ -1086,15 +1200,26 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_invoice_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('invoice')
+              field: silver_invoice_id
       - name: silver_line_number
         data_type: smallint
 
       - name: silver_product_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('product')
+              field: silver_product_id
       - name: silver_variant_id
         data_type: bigint
 
@@ -1180,12 +1305,23 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_payment_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('payment')
+              field: silver_payment_id
       - name: silver_invoice_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('invoice')
+              field: silver_invoice_id
       - name: silver_refund_amount
         data_type: numeric(18,2)
 
@@ -1259,9 +1395,16 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_invoice_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('invoice')
+              field: silver_invoice_id
       - name: silver_adjustment_type
         data_type: varchar(20)
 
@@ -1338,15 +1481,36 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_invoice_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('invoice')
+              field: silver_invoice_id
       - name: silver_old_status
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - open
+                - partial
+                - paid
+                - void
       - name: silver_new_status
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - open
+                - partial
+                - paid
+                - void
       - name: silver_changed_at_timestamp
         data_type: timestamp
 
@@ -1417,15 +1581,32 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_customer_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('customer')
+              field: silver_customer_id
       - name: silver_old_status
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - active
+                - inactive
       - name: silver_new_status
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - active
+                - inactive
       - name: silver_changed_at_timestamp
         data_type: timestamp
 
@@ -1496,12 +1677,24 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_customer_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('customer')
+              field: silver_customer_id
       - name: silver_address_type
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - billing
+                - shipping
       - name: silver_street_address_line_1
         data_type: varchar(200)
 
@@ -1514,6 +1707,10 @@ models:
       - name: silver_state_code
         data_type: varchar(2)
 
+        data_tests:
+          - relationships:
+              to: ref('state')
+              field: silver_state_code
       - name: silver_zip_code
         data_type: varchar(10)
 
@@ -1581,18 +1778,33 @@ models:
           - type: not_null
           - type: primary_key
 
+        data_tests:
+          - unique
+          - not_null
       - name: silver_invoice_number
         data_type: varchar(30)
 
       - name: silver_customer_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('customer')
+              field: silver_customer_id
       - name: silver_store_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('store')
+              field: silver_store_id
       - name: silver_employee_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('employee')
+              field: silver_employee_id
       - name: silver_billing_address_id
         data_type: bigint
 
@@ -1611,9 +1823,20 @@ models:
       - name: silver_invoice_status
         data_type: varchar(20)
 
+        data_tests:
+          - accepted_values:
+              values:
+                - open
+                - partial
+                - paid
+                - void
       - name: silver_tax_rate_id
         data_type: bigint
 
+        data_tests:
+          - relationships:
+              to: ref('tax_rate')
+              field: silver_tax_rate_id
       - name: silver_subtotal_amount
         data_type: numeric(18,2)
 

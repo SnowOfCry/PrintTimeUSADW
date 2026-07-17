@@ -1,345 +1,305 @@
-# PrintTimeUSA — Local ELT Data Warehouse
+# PrintTimeUSA Data Warehouse
 
-A fully portable, Docker-based **ELT** data warehouse for PrintTimeUSA (retail company, Modesto CA).  
-Clone the repo, copy `.env.example` to `.env`, and run `docker compose up -d` — no local installs required.
+A production-shaped, fully containerized **ELT data warehouse** for PrintTimeUSA — a retail
+print shop in Modesto, CA. It ingests operational data from an OLTP source into a raw **bronze**
+layer, refines it into a clean, contract-enforced **silver** layer with dbt, and serves a
+Kimball **gold** star schema for analytics — orchestrated by Apache Airflow, running entirely
+in Docker.
+
+> Clone the repo, copy `.env.example` to `.env`, and run `docker compose up -d`. No local
+> language runtimes required — everything runs in containers.
+
+---
+
+## Highlights
+
+- **Medallion architecture** (bronze → silver → gold) with an `audit` schema for ETL batch
+  control and lineage.
+- **ELT, not ETL** — Python owns Extract + Load only; every transformation is SQL in the
+  warehouse via **dbt Core**, so raw history is always preserved and logic is re-runnable.
+- **Contract-enforced silver layer — 20/20 models complete.** Every model is an incremental,
+  hash-gated merge with an enforced dbt contract (types, `NOT NULL`, primary key), deterministic
+  deduplication, and ADR-005 cleaning standards.
+- **Design decided in the open** — 14 Architecture Decision Records ([`docs/adr/`](docs/adr/))
+  capture every significant choice, its alternatives, and its consequences.
+- **Specification-first** — hand-written DDL specs, per-column data dictionaries, and
+  source-to-target mappings are the source of truth; dbt honors them.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Warehouse database | PostgreSQL 16 |
+| Transformation | dbt Core 1.8 + dbt-postgres (model contracts, incremental merge) |
+| Ingestion (Extract + Load) | Python 3.11 (pandas, SQLAlchemy) |
+| Orchestration | Apache Airflow 2.9 |
+| Database GUI | pgAdmin 4 |
+| Code quality | SonarQube, ruff, mypy, pytest (CI on every push) |
+| Runtime | Docker + Docker Compose |
 
 ---
 
 ## Table of Contents
 
-1. [Project Purpose](#1-project-purpose)
-2. [ELT Architecture](#2-elt-architecture)
-3. [Why ELT Instead of ETL](#3-why-elt-instead-of-etl)
-4. [Folder Structure](#4-folder-structure)
-5. [Docker Services](#5-docker-services)
-6. [Getting Started](#6-getting-started)
-7. [Stopping and Resetting](#7-stopping-and-resetting)
-8. [Service URLs & Credentials](#8-service-urls--credentials)
-9. [Airflow DAG](#9-airflow-dag)
-10. [Python Ingestion Layer](#10-python-ingestion-layer)
-11. [dbt Transformation Layer](#11-dbt-transformation-layer)
-12. [SQL Scripts](#12-sql-scripts)
-13. [Pipeline Logs & Watermarks](#13-pipeline-logs--watermarks)
-14. [Git / GitHub Workflow](#14-git--github-workflow)
-15. [Next Steps — Adding Real OLTP Extraction](#15-next-steps--adding-real-oltp-extraction)
-16. [Next Steps — Adding Real dbt Models](#16-next-steps--adding-real-dbt-models)
+1. [Architecture](#architecture)
+2. [Project Status](#project-status)
+3. [Repository Structure](#repository-structure)
+4. [Getting Started](#getting-started)
+5. [Docker Services](#docker-services)
+6. [Service URLs & Credentials](#service-urls--credentials)
+7. [The dbt Transformation Layer](#the-dbt-transformation-layer)
+8. [Python Ingestion Layer](#python-ingestion-layer)
+9. [Orchestration (Airflow DAG)](#orchestration-airflow-dag)
+10. [Audit, Batches & Watermarks](#audit-batches--watermarks)
+11. [Documentation](#documentation)
+12. [Development Workflow](#development-workflow)
+13. [Roadmap](#roadmap)
 
 ---
 
-## 1. Project Purpose
-
-This project is the local development data warehouse for PrintTimeUSA.  
-It extracts operational data from OLTP source systems, loads it into a raw bronze layer, and transforms it through clean silver and analytical gold layers using dbt — all orchestrated by Apache Airflow and running entirely inside Docker.
-
----
-
-## 2. ELT Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          AIRFLOW (Orchestration)                        │
 │                                                                         │
-│  ┌──────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────┐ │
-│  │ Extract  │───▶│  Load        │───▶│  Transform    │───▶│  Test    │ │
-│  │ (Python) │    │  (Python)    │    │  (dbt)        │    │  (dbt)   │ │
-│  └──────────┘    └──────────────┘    └───────────────┘    └──────────┘ │
+│  ┌──────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────┐  │
+│  │ Extract  │──▶ │  Load        │──▶ │  Transform    │──▶ │  Test    │  │
+│  │ (Python) │    │  (Python)    │    │  (dbt)        │    │  (dbt)   │  │
+│  └──────────┘    └──────────────┘    └───────────────┘    └──────────┘  │
 │       │                 │                    │                          │
-│  OLTP Source       bronze schema    silver → gold schemas               │
+│  OLTP source       bronze schema     silver → gold schemas              │
 └─────────────────────────────────────────────────────────────────────────┘
 
-PostgreSQL Schemas
+PostgreSQL schemas
 ──────────────────
-bronze   Raw data as extracted (Python writes here)
-silver   Cleaned, standardized, deduplicated (dbt writes here)
-gold     Star-schema dimensions and facts (dbt writes here)
-audit    Reconciliation/lineage records, ETL batch control, watermarks
+bronze   Raw source rows, append-only (Python writes here)
+silver   Clean, typed, deduplicated — one current row per business key (dbt)
+gold     Kimball star schema: conformed dimensions + facts (dbt)
+audit    ETL batch control, incremental watermarks, row-level change trail
 ```
 
-**Extract** — Python reads raw records from the OLTP source system, using watermarks for incremental loads.  
-**Load** — Python writes raw records into `bronze` with no business transformations.  
-**Transform** — dbt models clean bronze data into `silver`, then build dimensional models in `gold`.  
-**Orchestrate** — Airflow DAGs schedule and sequence every step.  
-**Monitor** — `audit.etl_batch_control` tracks every ETL batch (run stats plus incremental watermarks); `audit.audit_log` holds the row-level change trail.  
-**Quality** — dbt tests validate data; SonarQube checks Python code quality.
+- **Extract** — Python reads from the OLTP source, using per-table watermarks for incremental
+  loads.
+- **Load** — Python appends raw rows into `bronze` with zero business transformation.
+- **Transform** — dbt cleans `bronze` into `silver` (incremental hash-gated merge), then builds
+  the `gold` star schema.
+- **Orchestrate** — an Airflow DAG sequences extract → load → silver → gold → tests.
+- **Govern** — `audit.etl_batch_control` records every batch (run stats + watermarks);
+  `audit.audit_log` holds the row-level change trail.
 
----
-
-## 3. Why ELT Instead of ETL
+### Why ELT instead of ETL
 
 | Concern | ETL | ELT (this project) |
 |---|---|---|
-| Where transformations happen | In a separate tool before loading | Inside the warehouse using SQL (dbt) |
-| Scalability | Transforms bound by ETL server | Transforms run on the warehouse engine |
-| Auditability | Raw data often not kept | Raw data always available in bronze |
-| Developer experience | Two languages tightly coupled | Python owns extraction only; SQL owns all business logic |
+| Where transforms happen | Separate tool, before load | In the warehouse, in SQL (dbt) |
+| Raw history | Often discarded | Always retained in bronze |
 | Re-processing | Must re-extract to change logic | Re-run dbt against existing bronze |
+| Language coupling | Two languages intertwined | Python extracts only; SQL owns business logic |
+
+See [ADR-003: ELT over ETL](docs/adr/003-elt-over-etl.md) and
+[ADR-001: Adopt a medallion architecture](docs/adr/001-adopt-medallion-architecture.md).
 
 ---
 
-## 4. Folder Structure
+## Project Status
+
+| Layer | Status |
+|---|---|
+| **Bronze** (20 source tables) | ✅ Ingested via Python (append-only) |
+| **Silver** (20 models) | ✅ **Complete** — contract-enforced incremental merge, `dbt build --select silver` passes 20/20 |
+| **Gold** (Kimball star schema) | 🚧 Designed (DDL, mappings, dictionary); dbt models in progress |
+| **Audit** (batch control + lineage) | ✅ In place |
+| **Orchestration** (Airflow DAG) | 🚧 Wired end-to-end; runs against the current layers |
+| **Governance** (14 ADRs, dictionaries, mappings) | ✅ Complete |
+
+The silver layer is the current centerpiece: every one of the 20 models applies the same
+pattern — deduplicate append-only bronze to one current row per business key, cast to the DDL
+types, normalize per ADR-005, compute a change-detection hash, and merge incrementally with a
+build-time contract enforcing types, `NOT NULL`s, and the primary key.
+
+---
+
+## Repository Structure
 
 ```
 PrintTimeUSADW/
-│
-├── docker/                         Docker build contexts
-│   ├── postgres/
-│   │   ├── init/
-│   │   │   ├── 001_create_schemas.sql
-│   │   │   └── 002_create_audit_tables.sql
-│   │   └── Dockerfile
-│   ├── airflow/
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   ├── dbt/
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   └── sonarqube/
-│       └── sonar-project.properties
-│
+├── docker/                          Docker build contexts (postgres, airflow, dbt, sonarqube)
 ├── airflow/
-│   ├── dags/
-│   │   └── printtime_elt_pipeline.py ← ELT pipeline Airflow DAG
-│   ├── logs/                         ← Git-ignored; written at runtime
-│   ├── plugins/
-│   └── config/
-│
-├── ingestion/                       Python EL layer (Extract + Load only)
-│   ├── extract/
-│   │   └── oltp_extractor.py
-│   ├── load/
-│   │   └── bronze_loader.py
-│   ├── utils/
-│   │   ├── database.py
-│   │   ├── logger.py
-│   │   ├── config_loader.py
-│   │   └── watermark.py
-│   ├── config/
-│   │   └── ingestion_config.yml
-│   └── main.py
-│
-├── dbt/
-│   └── printtime_dw/
-│       ├── dbt_project.yml
-│       ├── profiles.yml
-│       ├── models/
-│       │   ├── bronze/              dbt source declarations
-│       │   ├── silver/              cleaning + standardization models
-│       │   └── gold/                dimensional models
-│       ├── macros/
-│       ├── seeds/
-│       ├── snapshots/
-│       └── tests/
-│
-├── sql/                             Plain SQL scripts (not dbt)
-│   ├── bronze/
-│   ├── silver/
-│   ├── gold/
-│   └── audit/
-│
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── data_quality/
-│
-├── docs/
-│   ├── architecture/
-│   ├── naming_conventions/
-│   ├── source_to_dw_mapping/
-│   └── data_dictionary/
-│
-├── scripts/
-│   ├── start.sh
-│   ├── stop.sh
-│   ├── reset.sh
-│   └── healthcheck.sh
-│
+│   └── dags/printtime_elt_pipeline.py   ELT pipeline DAG
+├── ingestion/                       Python Extract + Load (no business logic)
+│   ├── extract/  load/  utils/  config/  main.py
+├── dbt/printtime_dw/                dbt project
+│   ├── dbt_project.yml  profiles.yml
+│   ├── macros/generate_schema_name.sql
+│   └── models/
+│       ├── bronze/_bronze_sources.yml      source declarations (oltp_*, ref_*)
+│       ├── silver/                         20 models + _silver_models.yml (contracts)
+│       └── gold/                           dimensional models (in progress)
+├── sql/                             Authoritative DDL specs (bronze/silver/gold/audit)
+├── docs/                            ADRs, data dictionaries, mappings, load strategies, dbt guide
+├── tests/                           unit / integration / data_quality
+├── scripts/                         start.sh · stop.sh · reset.sh · healthcheck.sh
 ├── .github/workflows/ci.yml
-├── .env.example
-├── .gitignore
 ├── docker-compose.yml
-├── requirements-dev.txt
-└── README.md
+└── .env.example
 ```
 
 ---
 
-## 5. Docker Services
-
-| Service | Image | Port | Purpose |
-|---|---|---|---|
-| `postgres` | postgres:16 (custom) | 5432 | Data warehouse database |
-| `pgadmin` | dpage/pgadmin4:8.9 | 5050 | PostgreSQL GUI |
-| `airflow-init` | custom Airflow 2.9.3 | — | DB migration + admin user creation (runs once) |
-| `airflow-webserver` | custom Airflow 2.9.3 | 8080 | Airflow UI |
-| `airflow-scheduler` | custom Airflow 2.9.3 | — | DAG scheduling |
-| `dbt` | custom Python 3.11 | — | dbt Core + dbt-postgres (run ad-hoc) |
-| `sonarqube` | sonarqube:10.6-community | 9000 | Code quality analysis |
-
-All services share a single Docker bridge network: `elt_network`.
-
----
-
-## 6. Getting Started
+## Getting Started
 
 ### Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
-- Git installed.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- Git
 
-### Step 1 — Clone the repository
+### 1. Clone and configure
 ```bash
 git clone https://github.com/<your-org>/PrintTimeUSADW.git
 cd PrintTimeUSADW
+cp .env.example .env        # then edit .env and set your passwords — never commit it
 ```
 
-### Step 2 — Create your environment file
-```bash
-cp .env.example .env
-```
-Open `.env` and fill in your passwords. **Never commit `.env` to Git.**
-
-Generate `AIRFLOW_FERNET_KEY`:
+Generate an Airflow Fernet key and paste it into `.env` as `AIRFLOW_FERNET_KEY`:
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### Step 3 — Start the stack
+### 2. Start the stack
 ```bash
-bash scripts/start.sh
-```
-Or manually:
-```bash
-docker compose build
-docker compose up -d
+bash scripts/start.sh          # or: docker compose build && docker compose up -d
 ```
 
-### Step 4 — Verify
+### 3. Verify
 ```bash
 bash scripts/healthcheck.sh
+docker compose run --rm dbt dbt debug          # expect: "All checks passed!"
+```
+
+### Stopping and resetting
+```bash
+bash scripts/stop.sh           # stop, preserving data (named volumes)
+bash scripts/reset.sh          # DESTRUCTIVE — removes all data volumes
 ```
 
 ---
 
-## 7. Stopping and Resetting
+## Docker Services
 
-**Stop (preserve data):**
-```bash
-bash scripts/stop.sh
-```
+| Service | Image | Host Port | Purpose |
+|---|---|---|---|
+| `postgres` | postgres:16 (custom) | **5433** → 5432 | Warehouse database |
+| `pgadmin` | dpage/pgadmin4 | 5050 | PostgreSQL GUI |
+| `airflow-webserver` | Airflow 2.9 (custom) | 8080 | Airflow UI |
+| `airflow-scheduler` | Airflow 2.9 (custom) | — | DAG scheduling |
+| `airflow-init` | Airflow 2.9 (custom) | — | One-time DB migration + admin user |
+| `dbt` | Python 3.11 (custom) | — | dbt Core + dbt-postgres (run ad-hoc) |
+| `sonarqube` | sonarqube community | 9000 | Code quality analysis |
 
-**Full reset — DELETE all data:**
-```bash
-bash scripts/reset.sh
-```
+All services share one Docker bridge network, `elt_network`. Inside the network, containers
+reach Postgres at `postgres:5432`; from your host, use `localhost:5433`.
 
 ---
 
-## 8. Service URLs & Credentials
+## Service URLs & Credentials
 
-| Service | URL | Default Credential (from `.env.example`) |
+| Service | URL | Default credential (from `.env.example`) |
 |---|---|---|
 | pgAdmin | http://localhost:5050 | `admin@printtime.local` / `changeme_pgadmin` |
 | Airflow | http://localhost:8080 | `admin` / `changeme_admin` |
 | SonarQube | http://localhost:9000 | `admin` / `admin` (first login) |
-| PostgreSQL | `localhost:5432` | `warehouse_user` / `changeme_warehouse` |
+| PostgreSQL | `localhost:5433` | `warehouse_user` / `changeme_warehouse` |
 
-> Change all passwords before using this project with any real data.
+> These are development defaults. **Change every password before using real data.**
 
-### Connecting pgAdmin to PostgreSQL
-1. Open http://localhost:5050 and log in.
-2. Right-click **Servers → Register → Server**.
-3. **General** tab → Name: `PrintTimeUSA DW`
-4. **Connection** tab → Host: `postgres`, Port: `5432`, DB: `printtime_dw`, Username/Password from `.env`
+**Connect pgAdmin to Postgres:** Servers → Register → Server → Connection tab →
+Host `postgres`, Port `5432` (in-network), DB `printtime_dw`, user/password from `.env`.
+(Use `localhost` / `5433` only from a client running on your host.)
 
 ---
 
-## 9. Airflow DAG
-
-File: [`airflow/dags/printtime_elt_pipeline.py`](airflow/dags/printtime_elt_pipeline.py)
-
-```
-start_pipeline
-    → ingest_oltp_to_bronze  PythonOperator — extract every configured table → bronze
-    → run_dbt_silver         BashOperator   — dbt run --select silver
-    → run_dbt_gold           BashOperator   — dbt run --select gold
-    → run_dbt_tests          BashOperator   — dbt test
-    → update_control_logs    PythonOperator — updates batch log
-end_pipeline
-```
-
-Trigger manually: Airflow UI → `printtime_elt_pipeline` → **▶ Trigger DAG**
-
----
-
-## 10. Python Ingestion Layer
-
-Location: [`ingestion/`](ingestion/)
-
-Python is responsible **only** for:
-- Connecting to the OLTP source
-- Extracting raw data using watermarks for incremental loads
-- Loading raw records into `bronze` with zero business transformations
-- Writing batch and watermark state to `audit.etl_batch_control`
-
-Python is **NOT** responsible for cleaning data, building dimensions, or any dbt logic.
-
-| File | Purpose |
-|---|---|
-| `ingestion/extract/oltp_extractor.py` | Reads rows from OLTP source |
-| `ingestion/load/bronze_loader.py` | Writes raw DataFrames to `bronze` |
-| `ingestion/utils/database.py` | Connection helpers |
-| `ingestion/utils/watermark.py` | Read/update watermarks |
-| `ingestion/utils/logger.py` | Structured logging |
-| `ingestion/utils/config_loader.py` | YAML + env var config |
-| `ingestion/config/ingestion_config.yml` | Source table list |
-
----
-
-## 11. dbt Transformation Layer
+## The dbt Transformation Layer
 
 Location: [`dbt/printtime_dw/`](dbt/printtime_dw/)
 
 | Layer | Schema | What dbt does |
 |---|---|---|
-| Bronze | `bronze` | Source declarations + freshness checks |
-| Silver | `silver` | Cleans, casts, deduplicates, standardizes |
-| Gold | `gold` | Star-schema dimensions (dim_*) and facts (fct_*) |
+| Bronze | `bronze` | Source declarations (`oltp_*`, `ref_*`) + optional freshness checks |
+| Silver | `silver` | Clean, cast, normalize, deduplicate → one current row per key (incremental merge) |
+| Gold | `gold` | Kimball dimensions (`dim_*`) and facts (`fact_*`) — SCD2 + per-grain loads |
 
+Every silver model shares one spec-compliant shape:
+
+- **Incremental merge** keyed on the business key, with a watermark on `bronze_batch_id`
+  ([ADR-006](docs/adr/006-silver-incremental-merge.md)).
+- **Deterministic dedup** — `ROW_NUMBER()` over the standardized freshness order.
+- **Change-detection hash** (`silver_row_hash`) so the merge fires only on genuine change.
+- **Enforced contract** — types, `NOT NULL`s, and the primary key
+  ([`models/silver/_silver_models.yml`](dbt/printtime_dw/models/silver/_silver_models.yml)).
+- **ADR-005 cleaning** — casting, normalization, lowercase status vocabularies, derived flags.
+
+Common commands (dbt runs in its container):
 ```bash
-# Verify connection
-docker compose run --rm dbt dbt debug
-
-# Run silver models
-docker compose run --rm dbt dbt run --select silver
-
-# Run gold models
-docker compose run --rm dbt dbt run --select gold
-
-# Run all dbt tests
-docker compose run --rm dbt dbt test
-
-# Build silver + gold + tests in one command
-docker compose run --rm dbt dbt build --select silver gold
+docker compose run --rm dbt dbt debug                         # verify connection
+docker compose run --rm dbt dbt build  --select silver        # build + test all silver models
+docker compose run --rm dbt dbt run    --select state         # one model
+docker compose run --rm dbt dbt run    --select silver --full-refresh
 ```
 
+New to the project? See the from-scratch build guide:
+[`docs/dbt/PrintTimeUSA_dbt_Build_Guide.docx`](docs/dbt/PrintTimeUSA_dbt_Build_Guide.docx),
+and the running decision log [`docs/dbt/dbt_decisions.md`](docs/dbt/dbt_decisions.md).
+
 ---
 
-## 12. SQL Scripts
+## Python Ingestion Layer
 
-Location: [`sql/`](sql/)
+Location: [`ingestion/`](ingestion/)
 
-| Folder | Purpose |
+Python is responsible **only** for Extract + Load:
+- connect to the OLTP source and extract raw rows (incremental via watermarks),
+- append raw rows into `bronze` with zero business transformation,
+- record batch + watermark state in `audit.etl_batch_control`.
+
+It does **not** clean data or build models — that is dbt's job (see
+[ADR-003](docs/adr/003-elt-over-etl.md)).
+
+| File | Purpose |
 |---|---|
-| `sql/bronze/` | Ad-hoc raw data queries, manual bronze table DDL |
-| `sql/silver/` | Prototype silver queries before converting to dbt |
-| `sql/gold/` | Prototype gold queries |
-| `sql/audit/` | ETL batch control, watermark queries, reconciliation counts, lineage inserts |
+| `ingestion/extract/oltp_extractor.py` | Read rows from the OLTP source |
+| `ingestion/load/bronze_loader.py` | Append raw rows to `bronze`, stamping metadata |
+| `ingestion/utils/database.py` | Connection helpers (OLTP + warehouse) |
+| `ingestion/utils/batch_control.py` | Start/complete/fail batch records in `audit` |
+| `ingestion/utils/watermark.py` | Resolve the last successful watermark per table |
+| `ingestion/config/ingestion_config.yml` | Source → bronze table configuration |
 
 ---
 
-## 13. Pipeline Logs & Watermarks
+## Orchestration (Airflow DAG)
+
+File: [`airflow/dags/printtime_elt_pipeline.py`](airflow/dags/printtime_elt_pipeline.py)
+
+```
+start_pipeline
+  → ingest_oltp_to_bronze   PythonOperator — extract each configured table → bronze
+  → run_dbt_silver          BashOperator   — dbt run --select silver
+  → run_dbt_gold            BashOperator   — dbt run --select gold
+  → run_dbt_tests           BashOperator   — dbt test
+  → update_control_logs     PythonOperator — finalize batch records in audit
+end_pipeline
+```
+
+Trigger manually from the Airflow UI (`printtime_elt_pipeline` → **Trigger DAG**), or on schedule.
+
+---
+
+## Audit, Batches & Watermarks
+
+The `audit` schema is the single source of ETL truth
+([ADR-008](docs/adr/008-consolidate-etl-control-into-audit-schema.md)).
 
 ```sql
--- Check recent ETL batches
+-- Recent ETL batches
 SELECT source_system, target_table, load_type, batch_status,
        rows_extracted, rows_inserted, rows_updated,
        batch_start_timestamp, batch_end_timestamp, error_message
@@ -352,48 +312,54 @@ SELECT DISTINCT ON (target_table)
        source_system, target_table, watermark_column,
        watermark_value_end AS last_watermark, batch_end_timestamp
 FROM   audit.etl_batch_control
-WHERE  batch_status = 'SUCCESS'
+WHERE  batch_status = 'succeeded'
 ORDER  BY target_table, batch_end_timestamp DESC;
 ```
 
 ---
 
-## 14. Git / GitHub Workflow
+## Documentation
+
+The `docs/` tree is a first-class part of this project:
+
+| Area | Location |
+|---|---|
+| **Architecture Decision Records** (001–014) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Data dictionaries** (bronze / silver / gold / audit) | [`docs/data_dictionary/`](docs/data_dictionary/) |
+| **Source-to-target mappings** | [`docs/source_to_dw_mapping/`](docs/source_to_dw_mapping/) |
+| **Load strategies** (bronze / silver / gold) | [`docs/load_strategy/`](docs/load_strategy/) |
+| **Silver validation & transformation set** | [`docs/silver_validation_and_transformation_set.md`](docs/silver_validation_and_transformation_set.md) |
+| **dbt build guide + decision log** | [`docs/dbt/`](docs/dbt/) |
+| **Authoritative DDL specs** | [`sql/`](sql/) (`bronze` · `silver` · `gold` · `audit`) |
+
+---
+
+## Development Workflow
 
 ```
-main        ← production-ready; protected branch
-develop     ← integration; merge feature/* here
-feature/*   ← one branch per feature or OLTP table
-hotfix/*    ← emergency fixes off main
+main        production-ready (protected)
+develop     integration branch for feature/*
+feature/*   one branch per feature or table
+hotfix/*    emergency fixes off main
 ```
 
-CI runs on every push: lint (ruff), type check (mypy), unit tests (pytest), docker compose validate.
+CI runs on every push: **ruff** (lint), **mypy** (types), **pytest** (unit), and
+`docker compose config` validation. Data quality is enforced by **dbt tests** and the model
+contracts.
 
 ---
 
-## 15. Next Steps — Adding Real OLTP Extraction
+## Roadmap
 
-1. Add OLTP credentials (`OLTP_HOST`, `OLTP_DB`, `OLTP_USER`, `OLTP_PASSWORD`) to `.env`
-2. Implement `get_oltp_connection()` in [`ingestion/utils/database.py`](ingestion/utils/database.py)
-3. Add source tables to [`ingestion/config/ingestion_config.yml`](ingestion/config/ingestion_config.yml)
-4. Implement `extract_table()` in [`ingestion/extract/oltp_extractor.py`](ingestion/extract/oltp_extractor.py) using `pd.read_sql()`
-5. Implement `load_dataframe_to_bronze()` in [`ingestion/load/bronze_loader.py`](ingestion/load/bronze_loader.py) using `df.to_sql()`
-6. Uncomment real SQL in [`ingestion/utils/watermark.py`](ingestion/utils/watermark.py)
-7. Wire the Airflow DAG — the real extractor/loader calls live in [`airflow/dags/printtime_elt_pipeline.py`](airflow/dags/printtime_elt_pipeline.py)
-8. Add `CREATE TABLE IF NOT EXISTS bronze.raw_<table>` scripts to `sql/bronze/` and run them once
-
----
-
-## 16. Next Steps — Adding Real dbt Models
-
-**Silver:** create `.sql` files in `dbt/printtime_dw/models/silver/` that read from `{{ source('bronze', 'raw_<table>') }}`, apply cleaning, and add entries to `_silver_models.yml`.
-
-**Gold:** create `.sql` files in `dbt/printtime_dw/models/gold/` that read from `{{ ref('stg_<table>') }}`, build surrogate keys, dimensions, and facts, and add entries to `_gold_models.yml`.
-
-**Sources:** update `_bronze_sources.yml` to declare every real bronze table.
-
-**Tests:** add `unique`, `not_null`, and `relationships` tests to every model's `.yml` entry.
+- [x] Bronze ingestion (Python EL) — 20 source tables, append-only
+- [x] Silver layer — 20 contract-enforced incremental-merge models
+- [x] Governance — 14 ADRs, data dictionaries, mappings, load strategies
+- [ ] dbt data tests (`unique` / `not_null` / `relationships`) alongside contracts
+- [ ] DRY the shared lineage/metadata block into a reusable macro
+- [ ] Gold layer — SCD2 dimensions + per-grain fact loads ([ADR-007](docs/adr/007-gold-mixed-load-strategy.md))
+- [ ] Wire the full pipeline end-to-end in Airflow with real batch IDs
 
 ---
 
-*PrintTimeUSA ELT Data Warehouse — built with Apache Airflow, dbt Core, PostgreSQL, pgAdmin, and SonarQube running in Docker.*
+*PrintTimeUSA Data Warehouse — built with PostgreSQL, dbt Core, Apache Airflow, pgAdmin, and
+SonarQube, running in Docker.*

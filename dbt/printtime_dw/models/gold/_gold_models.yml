@@ -2,92 +2,86 @@ version: 2
 
 # =============================================================================
 # _gold_models.yml
-# Documents and tests dbt gold-layer models.
-# Gold models build star-schema dimensions and fact tables for analytics.
-# Add one model block per .sql file you create in this folder.
+# dbt model contracts + tests for the gold (Kimball star-schema) layer.
+# Each contract enforces the exact shape of sql/gold/002_create_gold_tables.sql:
+# column names, data types, NOT NULL constraints, and the primary key.
+# Columns are listed in the order the model's SELECT emits them.
+# Add one model block per .sql file in this folder.
 # =============================================================================
 
 models:
 
-  # ── Placeholder: replace with your real gold models ────────────────────────
-
-  - name: dim_customers
-    description: >
-      Customer dimension table. Built from silver.stg_customers.
-      Assigns surrogate keys and adds conformed attributes for analytics.
-    config:
-      materialized: table
-      schema: gold
-    columns:
-      - name: customer_key
-        description: "Surrogate key (integer sequence)."
-        tests:
-          - unique
-          - not_null
-      - name: customer_id
-        description: "Natural key from source system."
-        tests:
-          - not_null
-
-  - name: dim_products
-    description: >
-      Product dimension table. Built from silver.stg_products.
-    config:
-      materialized: table
-      schema: gold
-    columns:
-      - name: product_key
-        tests:
-          - unique
-          - not_null
-      - name: product_id
-        tests:
-          - not_null
-
+  # ── gold.dim_date (Type 0 — generated calendar) ─────────────────────────────
   - name: dim_date
-    description: >
-      Date dimension table. Populated from a seed or generated via dbt macro.
-      Provides calendar attributes (year, quarter, month, week, day_of_week).
+    description: "Conformed calendar dimension (YYYYMMDD smart key). Generated 2020-2030 + a -1 Not Provided member. Referenced directly and via role-playing date views (ADR-010)."
     config:
-      materialized: table
-      schema: gold
+      contract:
+        enforced: true
     columns:
       - name: date_key
-        description: "Integer date key in YYYYMMDD format."
-        tests:
-          - unique
-          - not_null
-      - name: full_date
-        description: "Calendar date (DATE type)."
-        tests:
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
           - unique
           - not_null
 
-  - name: fct_orders
-    description: >
-      Orders fact table. Grain = one row per order line item.
-      Joins silver.stg_orders with gold dimensions.
-    config:
-      materialized: table
-      schema: gold
-    columns:
-      - name: order_key
-        description: "Surrogate key."
-        tests:
-          - unique
+      - name: date
+        data_type: date
+        constraints:
+          - type: not_null
+
+      - name: full_date_description
+        data_type: varchar(50)
+
+      - name: day_of_week
+        data_type: varchar(10)
+
+      - name: day_number_in_calendar_month
+        data_type: smallint
+
+      - name: last_day_in_month_indicator
+        data_type: varchar(3)
+
+      - name: calendar_week_ending_date
+        data_type: date
+
+      - name: calendar_month_name
+        data_type: varchar(10)
+
+      - name: calendar_month_number_in_year
+        data_type: smallint
+
+      - name: calendar_quarter
+        data_type: smallint
+
+      - name: calendar_year_quarter
+        data_type: varchar(7)
+
+      - name: calendar_year
+        data_type: smallint
+
+      - name: calendar_year_month
+        data_type: varchar(7)
+
+      - name: holiday_indicator
+        data_type: varchar(20)
+        data_tests:
           - not_null
-      - name: customer_key
-        description: "FK to dim_customers."
-        tests:
-          - not_null
-          - relationships:
-              to: ref('dim_customers')
-              field: customer_key
-      - name: product_key
-        description: "FK to dim_products."
-        tests:
-          - not_null
-      - name: order_date_key
-        description: "FK to dim_date."
-        tests:
-          - not_null
+
+      - name: weekday_indicator
+        data_type: varchar(10)
+        data_tests:
+          - accepted_values:
+              values: ['Weekday', 'Weekend', 'Unknown']
+
+      - name: etl_load_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: etl_updated_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null

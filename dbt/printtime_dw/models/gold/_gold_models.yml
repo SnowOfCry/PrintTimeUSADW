@@ -85,3 +85,48 @@ models:
         data_type: timestamp
         constraints:
           - type: not_null
+
+  # ── gold.dim_payment_type (Type 1 — overwrite) ─────────────────────────────
+  - name: dim_payment_type
+    description: "Payment-type dimension (Type 1 overwrite-in-place). Feeds gold.fact_payments. dbt-managed integer surrogate key; -1 Not Provided member."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: payment_type_key
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: type_code
+        data_type: varchar(20)
+        constraints:
+          - type: not_null
+        data_tests:
+          - accepted_values:
+              values: ['DEPOSIT', 'BALANCE', 'FULL', 'REFUND', 'ADJUSTMENT', 'Not Provided']
+
+      - name: type_name
+        data_type: varchar(50)
+
+      - name: description
+        data_type: varchar(200)
+
+      - name: etl_load_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: etl_updated_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: is_deleted
+        data_type: boolean
+        constraints:
+          - type: not_null

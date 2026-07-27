@@ -768,3 +768,120 @@ models:
 
       - name: deleted_timestamp
         data_type: timestamp
+
+  # ── gold.fact_retail_sales (transaction fact — grain: invoice line) ────────
+  - name: fact_retail_sales
+    description: "Retail sales fact. Grain: one row per invoice line. Loaded incrementally by reload-by-invoice (gold decision #3); dimension keys resolved against the current version with a -1 fallback (ADR-011)."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: sales_line_key
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: date_key
+        data_type: integer
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+
+      - name: cashier_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_cashier')
+              field: cashier_key
+
+      - name: product_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_product')
+              field: product_key
+
+      - name: customer_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_customer')
+              field: customer_key
+
+      - name: store_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_store')
+              field: store_key
+
+      - name: invoice_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_invoice')
+              field: invoice_key
+
+      - name: invoice_number
+        data_type: varchar(30)
+
+      - name: sales_qty
+        data_type: integer
+
+      - name: unit_price
+        data_type: numeric(12,2)
+
+      - name: unit_cost
+        data_type: numeric(12,2)
+
+      - name: sales_amount
+        data_type: numeric(12,2)
+
+      - name: sales_cost
+        data_type: numeric(12,2)
+
+      - name: gross_profit
+        data_type: numeric(12,2)
+
+      - name: source_system
+        data_type: varchar(50)
+
+      - name: source_record_id
+        data_type: varchar(100)
+
+      - name: etl_batch_id
+        data_type: varchar(50)
+
+      - name: etl_load_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: etl_updated_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: is_complete
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: is_validated
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_description
+        data_type: varchar(500)

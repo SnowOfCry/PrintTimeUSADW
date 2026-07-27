@@ -3,6 +3,12 @@
 -- Creates the layered data warehouse schemas for the PrintTimeUSA ELT pipeline.
 -- =============================================================================
 
+-- Extensions -----------------------------------------------------------------
+-- pgcrypto provides digest() for SHA-256, used by the gold SCD2 dimensions to
+-- compute record_hash CHAR(64) (change detection, ADR-015). Installed into
+-- public so every schema can reach it via the default search_path.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Bronze: raw data loaded directly from OLTP sources with no transformation.
 CREATE SCHEMA IF NOT EXISTS bronze;
 COMMENT ON SCHEMA bronze IS 'Raw layer: data loaded as-is from OLTP source systems by Python ingestion.';

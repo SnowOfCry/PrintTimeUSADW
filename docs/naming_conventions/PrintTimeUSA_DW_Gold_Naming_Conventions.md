@@ -70,8 +70,8 @@ gold.vw_<role>_date    -- role-playing date view over dim_date
 
 Rules:
 
-- **Surrogate keys** end in `_key` and are `INTEGER GENERATED ALWAYS AS IDENTITY`, declared as the table `PRIMARY KEY`. They are meaningless integers owned by the warehouse.
-- **`dim_date.date_key` is the exception**: a *smart* surrogate key in `YYYYMMDD` integer format (e.g. `20260115`), not identity-generated, so date roles and facts can derive it deterministically.
+- **Surrogate keys** end in `_key` and are plain `INTEGER`, assigned by dbt at load time (not a DB identity — see ADR-015 decision #7), and declared as the table `PRIMARY KEY` via the model contract. They are meaningless integers owned by the warehouse.
+- **`dim_date.date_key` is the exception**: a *smart* surrogate key in `YYYYMMDD` integer format (e.g. `20260115`) rather than a meaningless dbt-assigned integer, so date roles and facts can derive it deterministically.
 - **Natural/business keys** keep the source identifier and end in `_id` (or `_code` / `_number` where the business uses those terms). They are *not* the primary key in Gold.
 - **Degenerate dimensions** (e.g. `invoice_number`) are business identifiers stored directly on a fact with no separate dimension row.
 - **Facts reference dimensions** by the dimension's surrogate `_key` (e.g. `fact_payments.customer_key` → `dim_customer.customer_key`). These are logical foreign keys (indexed, not enforced with FK constraints, per warehouse load practice).

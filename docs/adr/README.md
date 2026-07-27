@@ -24,12 +24,13 @@ PrintTimeUSA Data Warehouse. Each ADR captures one significant decision — its 
 | [012](012-data-quality-strategy.md) | Data quality & validation strategy (severity tiers) | Accepted | Erick Palma, Freddy Vazquez |
 | [013](013-data-governance-and-pii.md) | Data governance — PII classification, access, retention, deletion | Accepted | Jaime Chavez Jr, Freddy Vazquez |
 | [014](014-customer-county-not-provided.md) | Accept `dim_customer.customer_county` as 'Not Provided' (no source) | Accepted | Erick Palma |
+| [015](015-gold-scd2-dbt-implementation.md) | Gold SCD2 dimensions — custom incremental dbt model (append + post-hooks) over dbt snapshots | Accepted | Erick Palma |
 
 ## Reading order
 
 - **Foundations:** 001 (architecture) → 002 (stack) → 003 (ELT)
 - **Per layer:** 004 (bronze) → 005–006 (silver) → 007 (gold) → 008 (audit/control)
-- **Gold modeling details:** 009 (lean facts) · 010 (date views) · 011 (Not Provided members)
+- **Gold modeling details:** 009 (lean facts) · 010 (date views) · 011 (Not Provided members) · 015 (SCD2 dbt implementation)
 - **Cross-cutting:** 012 (data quality) · 013 (governance/PII) · 014 (customer_county gap)
 
 ## Adding a new ADR

@@ -140,7 +140,7 @@ Change detection: `silver_updated_at_timestamp` vs. the last successful gold bat
 | Aspect | Silver | Gold |
 |---|---|---|
 | Reads from | bronze (`{{ source() }}`) | silver (`{{ ref() }}`) |
-| Primary key | business key (natural) | **surrogate key** (identity) — dims; smart key — `dim_date` |
+| Primary key | business key (natural) | **surrogate key** (dbt-managed integer) — dims; smart key — `dim_date` |
 | Row per key | exactly one (current) | **many versions** (Type 2 dims); one (Type 1); N/A (facts) |
 | Write mode | `incremental` + **merge** (upsert) | `table` / `incremental` **append** / snapshot |
 | History | none (current only) | **SCD2** in the Type 2 dims |

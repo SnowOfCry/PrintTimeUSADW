@@ -130,3 +130,97 @@ models:
         data_type: boolean
         constraints:
           - type: not_null
+
+  # ── gold.dim_payment_method (Type 2 — SCD2, ADR-015) ───────────────────────
+  - name: dim_payment_method
+    description: "Payment-method dimension (SCD Type 2). One row per method version; current version has is_current = true. Matched on the durable source_record_id; change detected via SHA-256 record_hash."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: payment_method_key
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: method_code
+        data_type: varchar(20)
+        constraints:
+          - type: not_null
+
+      - name: method_name
+        data_type: varchar(50)
+
+      - name: method_type
+        data_type: varchar(30)
+
+      - name: is_active
+        data_type: boolean
+
+      - name: record_hash
+        data_type: char(64)
+
+      - name: source_system
+        data_type: varchar(50)
+
+      - name: source_record_id
+        data_type: varchar(100)
+
+      - name: etl_batch_id
+        data_type: varchar(50)
+
+      - name: etl_load_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: etl_updated_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: valid_from
+        data_type: date
+
+      - name: valid_to
+        data_type: date
+
+      - name: is_current
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: row_version
+        data_type: integer
+        constraints:
+          - type: not_null
+
+      - name: is_complete
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: is_validated
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_description
+        data_type: varchar(500)
+
+      - name: is_deleted
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: deleted_timestamp
+        data_type: timestamp

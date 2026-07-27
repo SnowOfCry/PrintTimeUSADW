@@ -224,3 +224,115 @@ models:
 
       - name: deleted_timestamp
         data_type: timestamp
+
+  # ── gold.dim_product (Type 2 — SCD2, ADR-015) ──────────────────────────────
+  - name: dim_product
+    description: "Product dimension (SCD Type 2). One row per product version; category/department attributes are denormalized from silver.product_category and silver.department. Price and markup changes version the row for point-in-time margin analysis."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: product_key
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: sku_number
+        data_type: varchar(50)
+        constraints:
+          - type: not_null
+
+      - name: product_description
+        data_type: varchar(200)
+
+      - name: brand_description
+        data_type: varchar(100)
+
+      - name: category_description
+        data_type: varchar(100)
+
+      - name: department_number
+        data_type: varchar(20)
+
+      - name: department_description
+        data_type: varchar(100)
+
+      - name: markup
+        data_type: numeric(8,4)
+
+      - name: standard_price
+        data_type: numeric(12,2)
+
+      - name: local_made_indicator
+        data_type: varchar(20)
+        data_tests:
+          - accepted_values:
+              values: ['Local', 'Not Local', 'Not Provided']
+
+      - name: record_hash
+        data_type: char(64)
+
+      - name: source_system
+        data_type: varchar(50)
+
+      - name: source_record_id
+        data_type: varchar(100)
+
+      - name: etl_batch_id
+        data_type: varchar(50)
+
+      - name: etl_load_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: etl_updated_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: valid_from
+        data_type: date
+
+      - name: valid_to
+        data_type: date
+
+      - name: is_current
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: row_version
+        data_type: integer
+        constraints:
+          - type: not_null
+
+      - name: is_complete
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: is_validated
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_description
+        data_type: varchar(500)
+
+      - name: is_deleted
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: deleted_timestamp
+        data_type: timestamp

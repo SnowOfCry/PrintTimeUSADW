@@ -193,6 +193,7 @@ Source: **silver.invoice**; lookups: **silver.customer**, **silver.store**
 |---|---|---|
 | invoice_key | generate | Identity surrogate key. |
 | invoice_number | cast | silver.invoice.silver_invoice_number. Natural key. |
+| po_number | direct | silver.invoice.silver_po_number. Degenerate attribute so BI can group payments by customer PO (backlog #10, added during the Gold build). |
 | invoice_date | direct | silver.invoice.silver_invoice_date. |
 | invoice_status | direct | silver.invoice.silver_invoice_status. |
 | invoice_total | direct | silver.invoice.silver_total_amount. |

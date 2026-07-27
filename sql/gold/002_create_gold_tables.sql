@@ -208,6 +208,7 @@ COMMENT ON COLUMN gold.dim_store.record_hash IS 'SHA-256 of tracked attributes; 
 CREATE TABLE IF NOT EXISTS gold.dim_invoice (
     invoice_key INTEGER,
     invoice_number VARCHAR(30) NOT NULL,
+    po_number VARCHAR(50),
     invoice_date DATE,
     invoice_status VARCHAR(20),
     invoice_total NUMERIC(12,2),

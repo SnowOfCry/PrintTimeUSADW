@@ -885,3 +885,124 @@ models:
 
       - name: dq_issue_description
         data_type: varchar(500)
+
+  # ── gold.fact_payments (transaction fact — grain: payment) ─────────────────
+  - name: fact_payments
+    description: "Payments fact. Grain: one row per payment. Refunds are stored NEGATIVE and carry parent_payment_key pointing at the payment they reverse, so SUM(payment_amount) nets automatically — BI must not filter or negate them again (backlog #5). parent_payment_key is resolved in-model via a self-join (ADR-009)."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: payment_key
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: invoice_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_invoice')
+              field: invoice_key
+
+      - name: customer_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_customer')
+              field: customer_key
+
+      - name: payment_method_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_payment_method')
+              field: payment_method_key
+
+      - name: date_key
+        data_type: integer
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+
+      - name: payment_type_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_payment_type')
+              field: payment_type_key
+
+      - name: cashier_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_cashier')
+              field: cashier_key
+
+      - name: store_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_store')
+              field: store_key
+
+      - name: parent_payment_key
+        data_type: integer
+
+      - name: payment_sequence_num
+        data_type: smallint
+
+      - name: payment_amount
+        data_type: numeric(12,2)
+
+      - name: tax_amount
+        data_type: numeric(12,2)
+
+      - name: fee_amount
+        data_type: numeric(12,2)
+
+      - name: net_amount
+        data_type: numeric(12,2)
+
+      - name: source_system
+        data_type: varchar(50)
+
+      - name: source_record_id
+        data_type: varchar(100)
+
+      - name: etl_batch_id
+        data_type: varchar(50)
+
+      - name: etl_load_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: etl_updated_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: is_complete
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: is_validated
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_description
+        data_type: varchar(500)

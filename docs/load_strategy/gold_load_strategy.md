@@ -96,6 +96,18 @@ WHERE  f.invoice_key = (SELECT invoice_key FROM gold.dim_invoice d2 WHERE d2.inv
 
 (Sketch — the production version stages the key resolution instead of nesting subqueries.)
 
+### Refund sign convention (backlog #5 — required reading for BI)
+
+Refunds in `fact_payments` are stored as **negative** `payment_amount` values and carry
+`parent_payment_key` pointing at the payment they reverse. Verified in the built fact: all
+1,354 refunds are negative (−$19,275,453.64 total) and every one links to its parent on the
+same invoice, with zero orphans.
+
+Consequently `SUM(payment_amount)` **nets refunds automatically**. BI models must not filter
+refunds out, and must not negate them again — either would double-count the reversal. To report
+gross collections and refunds separately, split on `parent_payment_key IS NULL` (original
+payments) versus `IS NOT NULL` (refunds) rather than on the sign.
+
 ## Not Provided members
 
 Every dimension is seeded with a `-1` "Not Provided" member (`customer_key = -1`, attributes `'Not Provided'`, ADR-011). Any fact row whose dimension lookup fails resolves to `-1` instead of NULL, so BI tools never produce blank-row joins and unmatched rows stay countable.

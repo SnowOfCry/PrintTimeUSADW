@@ -1006,3 +1006,105 @@ models:
 
       - name: dq_issue_description
         data_type: varchar(500)
+
+  # ── gold.fact_customer_behavior_snapshot (periodic snapshot fact) ──────────
+  - name: fact_customer_behavior_snapshot
+    description: "Customer behavior snapshot. Grain: one row per customer per snapshot date. Monthly at month-end (decision #4), append-only — prior snapshots are immutable. Measures are computed as of the snapshot date. Override the date with --vars '{snapshot_date: YYYY-MM-DD}'."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: snapshot_key
+        data_type: integer
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: snapshot_date_key
+        data_type: integer
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+
+      - name: customer_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_customer')
+              field: customer_key
+
+      - name: last_order_date_key
+        data_type: integer
+        data_tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+
+      - name: lifetime_order_count
+        data_type: integer
+
+      - name: lifetime_sales_amount
+        data_type: numeric(14,2)
+
+      - name: orders_last_30_days
+        data_type: integer
+
+      - name: avg_days_to_full_payment
+        data_type: numeric(8,2)
+
+      - name: open_invoice_count
+        data_type: integer
+
+      - name: open_invoice_total
+        data_type: numeric(14,2)
+
+      - name: is_active_customer
+        data_type: boolean
+
+      - name: customer_status
+        data_type: varchar(20)
+        data_tests:
+          - accepted_values:
+              values: ['active', 'inactive']
+
+      - name: source_system
+        data_type: varchar(50)
+
+      - name: source_record_id
+        data_type: varchar(100)
+
+      - name: etl_batch_id
+        data_type: varchar(50)
+
+      - name: etl_load_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: etl_updated_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+
+      - name: is_complete
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: is_validated
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+
+      - name: dq_issue_description
+        data_type: varchar(500)

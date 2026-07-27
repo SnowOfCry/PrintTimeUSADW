@@ -41,7 +41,7 @@ The failure case is not hypothetical: dimension and fact loads are separate step
 
 - **Integrity now depends on pipeline discipline + tests, not the engine.** A bug could write a key that matches nothing (not even `-1`); relationship tests (ADR-012) exist to catch exactly that.
 - The `-1` seed rows are structural, not business data — dictionaries note them, and BI users occasionally ask what "Not Provided" means (a documentation duty, ADR-013).
-- Implementation detail: the surrogate keys are `GENERATED ALWAYS AS IDENTITY`, so seeding `-1` requires `OVERRIDING SYSTEM VALUE` — a deliberate, visible exception in the seed script.
+- Implementation detail: surrogate keys are dbt-managed plain `INTEGER`s (ADR-015 decision #7 superseded the original `GENERATED … AS IDENTITY` design), so seeding `-1` needs no `OVERRIDING SYSTEM VALUE` — the `-1` member is simply a literal `UNION ALL` row in each dimension model that flows through the same append/merge as the real rows.
 
 ## Related
 

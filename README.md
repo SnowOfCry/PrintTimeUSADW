@@ -20,7 +20,10 @@ in Docker.
 - **Contract-enforced silver layer — 20/20 models complete.** Every model is an incremental,
   hash-gated merge with an enforced dbt contract (types, `NOT NULL`, primary key), deterministic
   deduplication, and ADR-005 cleaning standards.
-- **Design decided in the open** — 14 Architecture Decision Records ([`docs/adr/`](docs/adr/))
+- **Complete gold star schema — 14/14 objects.** 8 dimensions (6 SCD Type 2 with full version
+  history), 3 facts, and 3 role-playing date views. Every fact reconciles to silver **to the
+  cent**, and the whole warehouse passes **159/159 dbt tests**.
+- **Design decided in the open** — 15 Architecture Decision Records ([`docs/adr/`](docs/adr/))
   capture every significant choice, its alternatives, and its consequences.
 - **Specification-first** — hand-written DDL specs, per-column data dictionaries, and
   source-to-target mappings are the source of truth; dbt honors them.
@@ -107,16 +110,16 @@ See [ADR-003: ELT over ETL](docs/adr/003-elt-over-etl.md) and
 | Layer | Status |
 |---|---|
 | **Bronze** (20 source tables) | ✅ Ingested via Python (append-only) |
-| **Silver** (20 models) | ✅ **Complete** — contract-enforced incremental merge, `dbt build --select silver` passes 20/20 |
-| **Gold** (Kimball star schema) | 🚧 Designed (DDL, mappings, dictionary); dbt models in progress |
+| **Silver** (20 models) | ✅ **Complete** — contract-enforced incremental merge — released as `v0.1.0-silver` |
+| **Gold** (Kimball star schema, 14 objects) | ✅ **Complete** — 8 dims (6 SCD2) + 3 facts + 3 date views — released as `v0.2.0-gold` |
 | **Audit** (batch control + lineage) | ✅ In place |
-| **Orchestration** (Airflow DAG) | 🚧 Wired end-to-end; runs against the current layers |
-| **Governance** (14 ADRs, dictionaries, mappings) | ✅ Complete |
+| **Orchestration** (Airflow DAG) | 🚧 DAG exists; dbt wiring with real batch IDs pending |
+| **Governance** (15 ADRs, dictionaries, mappings) | ✅ Complete |
 
-The silver layer is the current centerpiece: every one of the 20 models applies the same
-pattern — deduplicate append-only bronze to one current row per business key, cast to the DDL
-types, normalize per ADR-005, compute a change-detection hash, and merge incrementally with a
-build-time contract enforcing types, `NOT NULL`s, and the primary key.
+**Warehouse-wide: `dbt build --select silver gold` passes 159/159** (34 models + 125 tests).
+The facts reconcile exactly to silver — retail sales, payments, and customer lifetime value all
+match to the cent, with zero unresolved dimension keys. See the
+[gold star schema](docs/architecture/gold_star_schema.md) for the dimensional model.
 
 ---
 
@@ -238,6 +241,21 @@ Every silver model shares one spec-compliant shape:
   ([`models/silver/_silver_models.yml`](dbt/printtime_dw/models/silver/_silver_models.yml)).
 - **ADR-005 cleaning** — casting, normalization, lowercase status vocabularies, derived flags.
 
+The gold layer builds the star schema on top ([diagram](docs/architecture/gold_star_schema.md)):
+
+- **SCD Type 2 dimensions** ([ADR-015](docs/adr/015-gold-scd2-dbt-implementation.md)) — custom
+  incremental `append` models: a changed entity gets a *new version row* (`row_version + 1`) and
+  a post-hook closes the prior one (`is_current = false`). Matching is on the durable source id,
+  change detection on a SHA-256 `record_hash`, and surrogate keys are dbt-managed integers that
+  stay stable across runs.
+- **Facts at their natural grain** — `fact_retail_sales` reloads by invoice, `fact_payments`
+  resolves its refund chain in-model ([ADR-009](docs/adr/009-facts-carry-no-source-business-keys.md)),
+  and the behavior snapshot appends one immutable customer snapshot per month-end.
+- **`-1` "Not Provided" members** ([ADR-011](docs/adr/011-unknown-members-and-unenforced-fks.md))
+  in every dimension, so a failed lookup stays countable instead of becoming a NULL join.
+- **Role-playing date views** ([ADR-010](docs/adr/010-role-playing-date-views.md)) — one
+  conformed `dim_date`, re-labelled per role by a single macro.
+
 Common commands (dbt runs in its container):
 ```bash
 docker compose run --rm dbt dbt debug                         # verify connection
@@ -324,7 +342,8 @@ The `docs/` tree is a first-class part of this project:
 
 | Area | Location |
 |---|---|
-| **Architecture Decision Records** (001–014) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Architecture Decision Records** (001–015) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Gold star schema** (ER diagram + querying guide) | [`docs/architecture/gold_star_schema.md`](docs/architecture/gold_star_schema.md) |
 | **Data dictionaries** (bronze / silver / gold / audit) | [`docs/data_dictionary/`](docs/data_dictionary/) |
 | **Source-to-target mappings** | [`docs/source_to_dw_mapping/`](docs/source_to_dw_mapping/) |
 | **Load strategies** (bronze / silver / gold) | [`docs/load_strategy/`](docs/load_strategy/) |
@@ -352,12 +371,13 @@ contracts.
 ## Roadmap
 
 - [x] Bronze ingestion (Python EL) — 20 source tables, append-only
-- [x] Silver layer — 20 contract-enforced incremental-merge models
-- [x] Governance — 14 ADRs, data dictionaries, mappings, load strategies
-- [ ] dbt data tests (`unique` / `not_null` / `relationships`) alongside contracts
-- [ ] DRY the shared lineage/metadata block into a reusable macro
-- [ ] Gold layer — SCD2 dimensions + per-grain fact loads ([ADR-007](docs/adr/007-gold-mixed-load-strategy.md))
-- [ ] Wire the full pipeline end-to-end in Airflow with real batch IDs
+- [x] Silver layer — 20 contract-enforced incremental-merge models (`v0.1.0-silver`)
+- [x] dbt data tests — 75 silver tests (`unique` / `not_null` / `accepted_values` / `relationships`) + source freshness SLA
+- [x] Gold layer — 8 dims (6 SCD2) + 3 facts + 3 date views, 64 tests (`v0.2.0-gold`)
+- [x] Governance — 15 ADRs, data dictionaries, mappings, load strategies
+- [ ] Wire the full pipeline end-to-end in Airflow with real batch IDs (activates the incremental fact loads)
+- [ ] DRY the shared silver lineage/metadata block into a reusable macro
+- [ ] BI layer — connect Power BI/Tableau to the star schema
 
 ---
 

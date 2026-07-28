@@ -286,6 +286,69 @@ full 7 NOT NULLs.
 
 **Proof in repo:** `dbt/printtime_dw/models/silver/` (all 20), `.claude/skills/dw-spec-first/`
 
+## Lesson 9 — The gold layer: SCD2 dimensions, facts, and the star schema
+
+**Concept:** gold is where dbt stops producing "one clean row per key" and starts producing a
+Kimball star schema — surrogate keys, versioned history, fact grain, and `-1` members. Seven
+design decisions were locked *before* writing any model (recorded in `gold_load_strategy.md`
+and ADR-015), and the whole layer was built one object at a time with a live verification per
+object: 14 objects, `dbt build --select gold` = PASS 64.
+
+**1. Decisions before code (the spec-first payoff).** Reviewing the gold load strategy against
+the DDL and the real data surfaced six open questions + one that emerged during the build:
+match SCD2 on the durable `source_record_id`, not display codes (#1); `dim_invoice` is standard
+Type 2, not rebuilt from status history (#2); facts are incremental via
+`silver_updated_at_timestamp` vs. the last gold batch (#3); monthly month-end snapshots (#4);
+`-1` members (#5, later simplified by #7); custom incremental SCD2 over dbt snapshots (#6,
+ADR-015); and **dbt-managed integer surrogate keys** instead of DB identity columns (#7 — a
+contract can neither express `GENERATED AS IDENTITY` nor let the model omit the column).
+
+**2. The SCD2 pattern (ADR-015)** — one shape reused across all six Type 2 dims:
+- `incremental` + **`append`** (merge would overwrite in place = Type 1);
+- `staged` computes a SHA-256 `record_hash` over tracked attributes (needs `pgcrypto`, now in
+  the DB init); `changed` emits only new entities or changed hashes vs. `{{ this }}` current;
+- each emitted row is a **new version** (`row_version + 1`, fresh key = max + offset,
+  `is_current = true`); a **post-hook** closes the superseded version
+  (`is_current = false`, `valid_to = current_date`);
+- the `-1` member is a literal `UNION ALL` row emitted **only on the first build**
+  (`{% if not is_incremental() %}`), so the append never duplicates it.
+Every dim passed the same live proof: no change → `INSERT 0 0`; a real change → exactly one new
+version with the old key preserved; 0 entities with more than one current version.
+
+**3. Facts are lookups + grain, not versions.** Dimension keys resolve against the *current*
+version on the durable id, `coalesce(..., -1)`; measures are cast to the DDL; the surrogate key
+continues from `max({{ this }})`. Per-fact strategies: `fact_retail_sales` uses
+`delete+insert` keyed on `invoice_number` (reload-by-invoice, ADR-009 — no line id needed);
+`fact_payments` resolves `parent_payment_key` **in-model** via a self-join on this load's own
+key assignment (atomic + idempotent, vs. the sketch's second UPDATE pass); the behavior
+snapshot appends one immutable period per month-end, all measures computed **as of** the
+snapshot date, with a guard that makes a same-date re-run a no-op.
+
+**4. Reconciliation as the acceptance test.** Every fact was proven against silver, not
+assumed: sales \$2,987,210,221.51, payments \$1,864,219,754.32, lifetime value
+\$3,294,663,372.11 — all exact to the cent, zero `-1` fallbacks. The snapshot's as-of logic was
+proven by backfilling 2025-11-30: `orders_last_30_days` = 1,655 there vs. 0 at 2026-06-30.
+
+**5. Lessons that only showed up by testing the incremental path:** a `::text` vs
+`varchar(100)` cast passed `--full-refresh` but failed the incremental run
+(`on_schema_change='fail'` doing its job) — always test both paths. And with no gold batches
+logged yet, the batch watermark falls back to 1900-01-01, so fact runs are safe full reloads
+until Airflow starts logging gold batches — a documented limitation, not a bug.
+
+**6. First DRY macro.** The three role-playing date views are identical except the column
+prefix, so the 15-column aliasing lives once in `macros/role_playing_date_view.sql` and each
+view is a one-line call.
+
+**Decisions recorded along the way:** ADR-015 written; backlog #5 (refund sign convention:
+refunds stored negative, `SUM` nets automatically), #6 (18,2→12,2 narrowing verified safe:
+max total \$196,382.98) and #10 (`po_number` added to `dim_invoice`) closed.
+
+**Gold layer complete: 14/14 objects; warehouse-wide `dbt build --select silver gold` =
+PASS 159. Released as `v0.2.0-gold`.**
+
+**Proof in repo:** `dbt/printtime_dw/models/gold/` (all 14), `docs/adr/015-…`,
+`docs/architecture/gold_star_schema.md`
+
 ---
 
 ## Concept quick-reference
@@ -317,19 +380,27 @@ full 7 NOT NULLs.
 | History-tracked tables | one row per transition; `changed_at` ordering; never collapsed | Lesson 8 |
 | Derived flag formulas | fixed in ADR-005; `paid_in_full = paid >= total` (excludes void) | Lesson 8 |
 | Spec-first skill | read the governing spec before writing; spec wins | Lesson 8 |
+| SCD2 via `append` | new version row + post-hook closes the old; merge = Type 1 | Lesson 9 |
+| dbt-managed surrogate keys | model assigns keys; preserve from `{{ this }}`, new = max+offset | Lesson 9 |
+| `-1` member, first build only | `UNION ALL` under `{% if not is_incremental() %}` | Lesson 9 |
+| Fact key lookups | join dims on durable id + `is_current`; `coalesce(-1)` | Lesson 9 |
+| In-model self-join resolution | refund chain resolved against this load's own keys | Lesson 9 |
+| As-of snapshot measures | aggregate `<= snapshot_date`; same-date re-run = no-op | Lesson 9 |
+| Reconcile, don't assume | fact totals compared to silver, exact to the cent | Lesson 9 |
+| Test the incremental path | `--full-refresh` passing ≠ the incremental run passing | Lesson 9 |
 
 ---
 
-## Silver layer: DONE (20/20)
+## Silver layer: DONE (20/20) · Gold layer: DONE (14/14)
 
-All 20 silver models built, contract-enforced, spec-verified; `dbt build --select silver`
-passes 20/20 (models + contract tests).
+Warehouse-wide `dbt build --select silver gold` passes **159/159** (34 models + 125 tests).
+Releases: `v0.1.0-silver`, `v0.2.0-gold`.
 
 ## Next up
 
-- **Data tests** — `unique`/`not_null`/`relationships` as dbt tests alongside the contracts.
-- **DRY** — a macro for the repeated lineage+metadata block (and one for the hash).
-- **Regenerate the build guide** (`docs/dbt/PrintTimeUSA_dbt_Build_Guide.docx`) to reflect the
-  full layer.
-- **Wire dbt into the Airflow DAG** (Airflow passes the real `silver_batch_id`).
-- **Gold layer** — SCD2 dimensions + per-grain fact loads (ADR-007).
+- **Wire dbt into the Airflow DAG** — pass the real `silver_batch_id` and log gold batches to
+  `audit.etl_batch_control` (this activates the incremental fact loads).
+- **DRY** — a macro for the repeated silver lineage+metadata block; consider one for the SCD2
+  dim skeleton.
+- **Regenerate the build guide** (`docs/dbt/PrintTimeUSA_dbt_Build_Guide.docx`) to cover gold.
+- **BI layer** — connect Power BI/Tableau to the star schema.

@@ -4,7 +4,7 @@ PrintTimeUSA Data Warehouse | Deliberately deferred work and open decisions. Eac
 
 | # | Item | Context / where it came from | Trigger to act | Effort |
 |---|---|---|---|---|
-| 1 | Hash-skip for unchanged full-load snapshots | Append-only bronze stacks identical snapshots of the 13 `full_load` tables (~100 redundant rows/run). ADR-004. | Next time `bronze_loader.py` is touched, or after gold ships | ~1 h |
+| 1 | Hash-skip for unchanged full-load snapshots | Append-only bronze stacks identical snapshots of the 13 `full_load` tables (~100 redundant rows/run). ADR-004. **Now measurable and growing:** with the DAG running, `bronze.ref_state` went 3 → 24 rows across 8 batches, while incremental tables (e.g. `oltp_invoice_line`, 389,558 rows / 1 batch) correctly appended nothing — so the waste is isolated to the `full_load` tables exactly as ADR-004 predicted. A daily schedule adds ~100 redundant rows/day. | Gold has shipped and the DAG now runs daily — ready to act | ~1 h |
 | 2 | Bronze retention/archival policy | Bronze grows monotonically by design. ADR-004. | Bronze size becomes operationally noticeable (backups slow, disk pressure) | Design: ~half day |
 | 3 | `dim_customer.customer_county` source | No county column exists in OLTP/bronze/silver; gold defaults to `'Not Provided'`. Readiness review; planned ADR-014. | Business asks for county-level reporting → add ZIP→county reference table | ~half day |
 | 4 | PII handling implementation (email/phone) | `customer`/`employee` email + phone are CCPA-relevant PII; no masking/tagging implemented. Governance decision in planned ADR-013. | ADR-013 decision made | Depends on decision |

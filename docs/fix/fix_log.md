@@ -83,6 +83,25 @@ Habits that would have caught it:
 - **Fix the class, not the instance.** The first overflow was patched by shortening the format;
   had it been patched with enforcement, there would have been no second occurrence.
 
+### Follow-up: writing the regression test exposed a second defect
+
+The id-building was inline inside `start_batch()`, which opens a DB connection — so it could not
+be unit tested, which is *why* the bug recurred unnoticed. Extracting it to a pure
+`build_batch_id()` and writing tests (`tests/unit/test_batch_control.py`) immediately failed on a
+different assertion: **uniqueness depended on the wall clock advancing between calls.**
+
+`_start_gold_batches` opens four batches in a tight loop. Two landing in the same microsecond
+would collide against `uq_etl_batch_control_batch_id` and fail the task. It had not bitten us
+only because each call happens to make a DB round trip (~1 ms) — luck, not design.
+
+Fixed by making the epoch strictly increasing per process (`_next_epoch_micros()`, lock-guarded),
+so uniqueness no longer depends on clock resolution. Verified with 500 ids generated in a tight
+loop, all distinct and monotonic.
+
+> **A bug you cannot unit test will come back.** If fixing something requires extracting it into a
+> pure function to test it, that extraction *is* part of the fix — and the test may well find a
+> second defect the original bug was hiding.
+
 ---
 
 ## FIX-001 — dbt `PermissionError` writing `logs/` and `target/` under Airflow

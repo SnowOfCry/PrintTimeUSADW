@@ -11,6 +11,77 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-003 — `batch_id` uniqueness depended on the wall clock advancing
+
+| | |
+|---|---|
+| **Found** | 2026-07-28, while writing the regression test for **FIX-002** |
+| **Symptom** | Latent — never fired in production. Surfaced as a failing unit test: 50 ids generated in a tight loop were not all distinct. |
+| **Would have surfaced as** | `UniqueViolation` on `uq_etl_batch_control_batch_id`, failing a DAG task |
+| **Affected** | `ingestion/utils/batch_control.py` → `build_batch_id()` |
+| **Severity** | Low probability, task-fatal impact |
+
+### Cause
+
+`batch_id` derives its uniqueness entirely from a microsecond timestamp:
+
+```python
+suffix = f":{int(datetime.now().timestamp() * 1_000_000)}"
+```
+
+That is only unique if the clock actually advances between calls. It does not always: the DAG's
+`_start_gold_batches` opens **four batches in a tight loop**, and any two landing in the same
+microsecond produce identical ids and collide against the UNIQUE constraint.
+
+It had never fired because each call happens to make a DB round trip (~1 ms), which is far longer
+than the clock's resolution. That is luck, not design — the guarantee lived in the *timing of an
+unrelated I/O call*, not in the code.
+
+### How it was found
+
+This is the interesting part. FIX-002 recurred precisely because the id-building was **inline
+inside `start_batch()`**, which opens a database connection and therefore could not be unit
+tested. Closing FIX-002 properly meant extracting a pure `build_batch_id()` so the width
+guarantee could be asserted.
+
+The moment it became testable, a *different* assertion failed — the uniqueness one. The original
+bug had been hiding a second defect in the same function.
+
+### Fix
+
+Make the epoch strictly increasing per process, independent of clock resolution:
+
+```python
+_epoch_lock = threading.Lock()
+_last_epoch_micros = 0
+
+def _next_epoch_micros() -> int:
+    global _last_epoch_micros
+    with _epoch_lock:
+        now = int(datetime.now().timestamp() * 1_000_000)
+        if now <= _last_epoch_micros:
+            now = _last_epoch_micros + 1
+        _last_epoch_micros = now
+        return now
+```
+
+The lock matters because Airflow may run tasks concurrently; across separate processes the wall
+clock still separates them. Verified with 500 ids generated in a tight loop — all distinct and
+monotonically increasing (`tests/unit/test_batch_control.py`).
+
+### Rule
+
+> **A bug you cannot unit test will come back.** If fixing something requires extracting it into a
+> pure function to make it testable, that extraction *is* part of the fix — and the new test may
+> well find a second defect the original bug was hiding.
+
+A companion rule from the cause itself:
+
+> **Don't let a correctness guarantee rest on incidental timing.** If uniqueness depends on "the
+> clock will have moved by then", it depends on how fast the surrounding code happens to run.
+
+---
+
 ## FIX-002 — `batch_id` overflowed `VARCHAR(50)` on gold target names
 
 | | |
@@ -83,24 +154,8 @@ Habits that would have caught it:
 - **Fix the class, not the instance.** The first overflow was patched by shortening the format;
   had it been patched with enforcement, there would have been no second occurrence.
 
-### Follow-up: writing the regression test exposed a second defect
-
-The id-building was inline inside `start_batch()`, which opens a DB connection — so it could not
-be unit tested, which is *why* the bug recurred unnoticed. Extracting it to a pure
-`build_batch_id()` and writing tests (`tests/unit/test_batch_control.py`) immediately failed on a
-different assertion: **uniqueness depended on the wall clock advancing between calls.**
-
-`_start_gold_batches` opens four batches in a tight loop. Two landing in the same microsecond
-would collide against `uq_etl_batch_control_batch_id` and fail the task. It had not bitten us
-only because each call happens to make a DB round trip (~1 ms) — luck, not design.
-
-Fixed by making the epoch strictly increasing per process (`_next_epoch_micros()`, lock-guarded),
-so uniqueness no longer depends on clock resolution. Verified with 500 ids generated in a tight
-loop, all distinct and monotonic.
-
-> **A bug you cannot unit test will come back.** If fixing something requires extracting it into a
-> pure function to test it, that extraction *is* part of the fix — and the test may well find a
-> second defect the original bug was hiding.
+**Follow-up:** writing the regression test for this fix exposed a second, independent defect in
+the same function — see **FIX-003**.
 
 ---
 

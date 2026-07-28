@@ -23,7 +23,7 @@ in Docker.
 - **Complete gold star schema — 14/14 objects.** 8 dimensions (6 SCD Type 2 with full version
   history), 3 facts, and 3 role-playing date views. Every fact reconciles to silver **to the
   cent**, and the whole warehouse passes **159/159 dbt tests**.
-- **Design decided in the open** — 15 Architecture Decision Records ([`docs/adr/`](docs/adr/))
+- **Design decided in the open** — 16 Architecture Decision Records ([`docs/adr/`](docs/adr/))
   capture every significant choice, its alternatives, and its consequences.
 - **Specification-first** — hand-written DDL specs, per-column data dictionaries, and
   source-to-target mappings are the source of truth; dbt honors them.
@@ -114,7 +114,7 @@ See [ADR-003: ELT over ETL](docs/adr/003-elt-over-etl.md) and
 | **Gold** (Kimball star schema, 14 objects) | ✅ **Complete** — 8 dims (6 SCD2) + 3 facts + 3 date views — released as `v0.2.0-gold` |
 | **Audit** (batch control + lineage) | ✅ In place |
 | **Orchestration** (Airflow DAG) | ✅ **Wired end-to-end** — bronze → silver → gold → tests, with real batch IDs; the fact loads are genuinely incremental |
-| **Governance** (15 ADRs, dictionaries, mappings) | ✅ Complete |
+| **Governance** (16 ADRs, dictionaries, mappings, fix log) | ✅ Complete |
 
 **Warehouse-wide: `dbt build --select silver gold` passes 159/159** (34 models + 125 tests).
 The facts reconcile exactly to silver — retail sales, payments, and customer lifetime value all
@@ -138,7 +138,7 @@ PrintTimeUSADW/
 │   └── models/
 │       ├── bronze/_bronze_sources.yml      source declarations (oltp_*, ref_*)
 │       ├── silver/                         20 models + _silver_models.yml (contracts)
-│       └── gold/                           dimensional models (in progress)
+│       └── gold/                           8 dims + 3 facts + 3 date views + _gold_models.yml
 ├── sql/                             Authoritative DDL specs (bronze/silver/gold/audit)
 ├── docs/                            ADRs, data dictionaries, mappings, load strategies, dbt guide
 ├── tests/                           unit / integration / data_quality
@@ -363,7 +363,8 @@ The `docs/` tree is a first-class part of this project:
 
 | Area | Location |
 |---|---|
-| **Architecture Decision Records** (001–015) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Architecture Decision Records** (001–016) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Fix log** (root causes + the rules they generalize to) | [`docs/fix/fix_log.md`](docs/fix/fix_log.md) |
 | **Gold star schema** (ER diagram + querying guide) | [`docs/architecture/gold_star_schema.md`](docs/architecture/gold_star_schema.md) |
 | **Data dictionaries** (bronze / silver / gold / audit) | [`docs/data_dictionary/`](docs/data_dictionary/) |
 | **Source-to-target mappings** | [`docs/source_to_dw_mapping/`](docs/source_to_dw_mapping/) |

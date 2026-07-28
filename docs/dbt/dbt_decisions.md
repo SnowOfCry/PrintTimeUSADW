@@ -349,6 +349,63 @@ PASS 159. Released as `v0.2.0-gold`.**
 **Proof in repo:** `dbt/printtime_dw/models/gold/` (all 14), `docs/adr/015-…`,
 `docs/architecture/gold_star_schema.md`
 
+## Lesson 10 — Orchestration: making the incremental loads actually incremental
+
+**Concept:** every incremental mechanism built in Lessons 6–9 depended on batch bookkeeping that
+did not exist yet. Silver stamped `silver_batch_id = -1` (the ad-hoc default) and the gold facts,
+finding no succeeded gold batch, fell back to `1900-01-01` and reloaded everything on every run.
+The models were correct; the loop was open. Wiring the DAG closed it.
+
+**1. Where dbt runs (ADR-016).** dbt-core/dbt-postgres are installed in the Airflow image at
+versions pinned identically to `docker/dbt`, with the project mounted at the same path. Chosen
+over `DockerOperator`, which would have required mounting the host Docker socket into Airflow —
+a real security cost to avoid duplicating two pinned lines. The dedicated dbt service stays for
+ad-hoc work.
+
+**2. Passing a runtime value into dbt from Airflow.** `start_silver_batch` opens a batch and
+returns the key; XCom templating injects it into the dbt command:
+
+```python
+"--vars '{silver_batch_id: {{ ti.xcom_pull(task_ids=\"start_silver_batch\") }}}'"
+```
+
+Note this is **plain string concatenation, not an f-string** — the `{{ }}` must survive Python
+so Airflow's Jinja can render it. An f-string would try to evaluate the braces at import time.
+
+**3. Batch ordering is the whole trick.** Gold batches are opened *before* `dbt run --select
+gold` and marked succeeded *after*. Because the facts read the last **succeeded** batch, run N
+sees run N−1's timestamp — so a crashed run never advances the watermark and never causes silently
+skipped data.
+
+**4. Reading dbt's own results.** `target/run_results.json` carries `rows_affected` per model, so
+the completion tasks record real row counts in `audit.etl_batch_control` instead of guessing. Read
+it in the task *immediately after* the run it describes; treat missing entries as 0 (audit
+metadata should never fail a load).
+
+**5. Failure hygiene.** `fail_open_batches` (`trigger_rule=ONE_FAILED`) closes any batch a
+crashed run left `running`. Without it a failure would strand rows forever — and worse, a later
+manual completion could silently advance the fact watermark past unprocessed data. It is skipped
+on clean runs.
+
+**Two bugs that only running it could reveal** (both in `docs/fix/fix_log.md`):
+- **FIX-001** — dbt could not write `logs/`/`target/` inside the mounted project, owned by the dbt
+  container's user. Fixed with `DBT_LOG_PATH`/`DBT_TARGET_PATH` pointing at an Airflow-local dir,
+  which also stops orchestrated and ad-hoc runs from overwriting each other's `run_results.json`.
+- **FIX-002** — `batch_id` overflowed `VARCHAR(50)` on `gold.fact_customer_behavior_snapshot`
+  (53 chars). Notably the *second* occurrence of that bug class: the first was patched by
+  shortening the format rather than enforcing the width. Now the readable prefix is trimmed and
+  the uniqueness-bearing epoch suffix never is.
+
+**Proved end to end (5 DAG runs):** a clean run with `fail_open_batches` correctly skipped; a
+failed run where it closed both stranded batches (0 left `running`); a no-change run where the
+facts loaded **0 rows instead of 447k** and the DAG took ~60s instead of ~5min; and a genuine
+source change — `state_name` edited in the **OLTP database** — that flowed to bronze → silver
+(exactly 1 row rewritten, stamped with real batch 160; AZ/TX untouched at batch 42) → gold (every
+California store and customer versioned via SCD2, facts correctly loading 0 rows because no
+transaction changed).
+
+**Proof in repo:** `airflow/dags/printtime_elt_pipeline.py`, ADR-016, `docs/fix/fix_log.md`
+
 ---
 
 ## Concept quick-reference
@@ -388,19 +445,23 @@ PASS 159. Released as `v0.2.0-gold`.**
 | As-of snapshot measures | aggregate `<= snapshot_date`; same-date re-run = no-op | Lesson 9 |
 | Reconcile, don't assume | fact totals compared to silver, exact to the cent | Lesson 9 |
 | Test the incremental path | `--full-refresh` passing ≠ the incremental run passing | Lesson 9 |
+| XCom → `--vars` | pass runtime values into dbt; concat, never an f-string | Lesson 10 |
+| Batch open/close ordering | complete AFTER the run, so a crash can't advance the watermark | Lesson 10 |
+| `run_results.json` | dbt's own `rows_affected` → real audit row counts | Lesson 10 |
+| `ONE_FAILED` sweeper | close batches a crashed run stranded as `running` | Lesson 10 |
 
 ---
 
-## Silver layer: DONE (20/20) · Gold layer: DONE (14/14)
+## Silver DONE (20/20) · Gold DONE (14/14) · Orchestration DONE
 
 Warehouse-wide `dbt build --select silver gold` passes **159/159** (34 models + 125 tests).
+The Airflow DAG runs the whole pipeline with real batch IDs, so the incremental loads are live.
 Releases: `v0.1.0-silver`, `v0.2.0-gold`.
 
 ## Next up
 
-- **Wire dbt into the Airflow DAG** — pass the real `silver_batch_id` and log gold batches to
-  `audit.etl_batch_control` (this activates the incremental fact loads).
 - **DRY** — a macro for the repeated silver lineage+metadata block; consider one for the SCD2
   dim skeleton.
-- **Regenerate the build guide** (`docs/dbt/PrintTimeUSA_dbt_Build_Guide.docx`) to cover gold.
+- **Regenerate the build guide** (`docs/dbt/PrintTimeUSA_dbt_Build_Guide.docx`) to cover gold
+  and orchestration.
 - **BI layer** — connect Power BI/Tableau to the star schema.

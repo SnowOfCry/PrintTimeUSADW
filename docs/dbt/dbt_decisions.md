@@ -406,6 +406,50 @@ transaction changed).
 
 **Proof in repo:** `airflow/dags/printtime_elt_pipeline.py`, ADR-016, `docs/fix/fix_log.md`
 
+## Lesson 11 — DRY: a macro for the silver lineage/metadata block
+
+**Concept:** a dbt macro is a Jinja function that expands into SQL *before* Postgres sees it, so
+repeated SQL can live in one place without changing what runs. Every silver model closed its
+cleaning SELECT with the same 11-column audit block (7 lineage columns from bronze + 4 of
+silver's own stamping). Ten of the eleven were byte-identical across all 20 models, so the block
+became one macro, `macros/silver_lineage_and_metadata.sql`, called once per model.
+
+**1. The three pieces.** The **macro** is a template with `{{ }}` holes and fixed text between
+them. The **call** is one line in each model — `{{ silver_lineage_and_metadata(
+source_record_id='customer_id') }}`. The **expansion** is what `dbt compile`/`run` produces: the
+call is replaced by the full 11-column block with the holes filled. dbt auto-discovers anything in
+`macros/`, so there is no import.
+
+**2. Parameterize only what varies.** Three columns differ by model, so they are the three
+parameters — `source_record_id` (the natural key, required) and `source_created_at` /
+`source_updated_at` (defaulting to `created_at`/`updated_at`). The two history tables have no
+created/updated, only a change instant, so they override both to `changed_at_source_timestamp`.
+The defaults encode the common case; the overrides make the exception explicit at the call site.
+
+**3. `{{ var('silver_batch_id', -1) }}` rides along unchanged.** That hole was already dynamic
+before the refactor — it is the hook Airflow fills via `--vars` (Lesson 10). An ad-hoc run stamps
+`-1`; an orchestrated run stamps a real batch. The macro centralized it, it did not create it.
+
+**4. What stayed OUT of the macro, deliberately.** The change-detection hash is computed over
+*business* columns only, in a later CTE — never in this block — so metadata can never look like a
+change. Folding it in would have coupled two things that must stay separate.
+
+**5. Proving a refactor is a true no-op, not just "it built."** Touching 20 released models is
+risky, so equivalence was proven three ways rather than assumed: `state.sql`'s compiled SQL is
+byte-identical to the pre-macro version (whitespace-normalized diff empty); all 20 compiled models
+contain exactly the 11 lineage columns; and `dbt build --select silver` = 95/95, the contracts
+(`on_schema_change='fail'` + type/column enforcement) validating every schema. Postgres only ever
+sees the expansion, so identical expansion = identical behavior.
+
+**Payoff:** −264 lines, but the real value is that adding an audit column is now one edit instead
+of twenty, and the models **cannot drift** from each other. Deliberately did NOT `--full-refresh`
+silver to verify — that would refresh `silver_updated_at_timestamp` on every row and disturb the
+gold incremental watermark; the incremental build + compiled-SQL proof covers correctness without
+that side effect.
+
+**Proof in repo:** `dbt/printtime_dw/macros/silver_lineage_and_metadata.sql`, the 20
+`models/silver/*.sql` call sites.
+
 ---
 
 ## Concept quick-reference
@@ -449,6 +493,9 @@ transaction changed).
 | Batch open/close ordering | complete AFTER the run, so a crash can't advance the watermark | Lesson 10 |
 | `run_results.json` | dbt's own `rows_affected` → real audit row counts | Lesson 10 |
 | `ONE_FAILED` sweeper | close batches a crashed run stranded as `running` | Lesson 10 |
+| Macro = pre-render | Jinja expands to SQL before Postgres sees it; DRY without runtime change | Lesson 11 |
+| Parameterize the variance | fixed text in the macro, `{{ }}` holes only for what differs | Lesson 11 |
+| Prove a refactor is a no-op | compiled SQL byte-identical + contracts pass, not just "it built" | Lesson 11 |
 
 ---
 

@@ -23,7 +23,7 @@ in Docker.
 - **Complete gold star schema — 14/14 objects.** 8 dimensions (6 SCD Type 2 with full version
   history), 3 facts, and 3 role-playing date views. Every fact reconciles to silver **to the
   cent**, and the whole warehouse passes **159/159 dbt tests**.
-- **Design decided in the open** — 15 Architecture Decision Records ([`docs/adr/`](docs/adr/))
+- **Design decided in the open** — 16 Architecture Decision Records ([`docs/adr/`](docs/adr/))
   capture every significant choice, its alternatives, and its consequences.
 - **Specification-first** — hand-written DDL specs, per-column data dictionaries, and
   source-to-target mappings are the source of truth; dbt honors them.
@@ -113,8 +113,8 @@ See [ADR-003: ELT over ETL](docs/adr/003-elt-over-etl.md) and
 | **Silver** (20 models) | ✅ **Complete** — contract-enforced incremental merge — released as `v0.1.0-silver` |
 | **Gold** (Kimball star schema, 14 objects) | ✅ **Complete** — 8 dims (6 SCD2) + 3 facts + 3 date views — released as `v0.2.0-gold` |
 | **Audit** (batch control + lineage) | ✅ In place |
-| **Orchestration** (Airflow DAG) | 🚧 DAG exists; dbt wiring with real batch IDs pending |
-| **Governance** (15 ADRs, dictionaries, mappings) | ✅ Complete |
+| **Orchestration** (Airflow DAG) | ✅ **Wired end-to-end** — bronze → silver → gold → tests, with real batch IDs; the fact loads are genuinely incremental |
+| **Governance** (16 ADRs, dictionaries, mappings, fix log) | ✅ Complete |
 
 **Warehouse-wide: `dbt build --select silver gold` passes 159/159** (34 models + 125 tests).
 The facts reconcile exactly to silver — retail sales, payments, and customer lifetime value all
@@ -138,7 +138,7 @@ PrintTimeUSADW/
 │   └── models/
 │       ├── bronze/_bronze_sources.yml      source declarations (oltp_*, ref_*)
 │       ├── silver/                         20 models + _silver_models.yml (contracts)
-│       └── gold/                           dimensional models (in progress)
+│       └── gold/                           8 dims + 3 facts + 3 date views + _gold_models.yml
 ├── sql/                             Authoritative DDL specs (bronze/silver/gold/audit)
 ├── docs/                            ADRs, data dictionaries, mappings, load strategies, dbt guide
 ├── tests/                           unit / integration / data_quality
@@ -299,15 +299,36 @@ File: [`airflow/dags/printtime_elt_pipeline.py`](airflow/dags/printtime_elt_pipe
 
 ```
 start_pipeline
-  → ingest_oltp_to_bronze   PythonOperator — extract each configured table → bronze
-  → run_dbt_silver          BashOperator   — dbt run --select silver
-  → run_dbt_gold            BashOperator   — dbt run --select gold
-  → run_dbt_tests           BashOperator   — dbt test
-  → update_control_logs     PythonOperator — finalize batch records in audit
+  → ingest_oltp_to_bronze     Python — extract each configured table → bronze
+  → start_silver_batch        Python — open a batch in audit.etl_batch_control
+  → run_dbt_silver            dbt run --select silver --vars silver_batch_id=<key>
+  → complete_silver_batch     Python — mark succeeded (+ rows from run_results.json)
+  → start_gold_batches        Python — one batch per gold target
+  → run_dbt_gold              dbt run --select gold
+  → complete_gold_batches     Python — mark succeeded → advances the fact watermark
+  → run_dbt_tests             dbt test (fails the DAG on any broken test)
 end_pipeline
+fail_open_batches             Python — on failure only: closes stranded 'running' batches
 ```
 
+**Batch control is what makes the loads incremental.** Silver rows are stamped with the real
+`silver_batch_id` from `audit.etl_batch_control`, and the gold facts detect "what changed" by
+comparing `silver_updated_at_timestamp` against the last **succeeded** gold batch for their
+target — so completing those batches here is what turns the facts from full reloads into
+incremental ones. `fail_open_batches` (trigger rule `ONE_FAILED`) closes any batch a crashed run
+left open, so a later fix can't silently advance the watermark.
+
+dbt runs inside the Airflow image (`dbt-core`/`dbt-postgres` pinned identically to
+`docker/dbt/requirements.txt`), with the project mounted at `/dbt/printtime_dw`. dbt writes its
+logs and artifacts to `/opt/airflow/dbt_artifacts` so orchestrated runs never collide with
+ad-hoc ones in the dbt container.
+
 Trigger manually from the Airflow UI (`printtime_elt_pipeline` → **Trigger DAG**), or on schedule.
+
+Verified end to end: a `state_name` change in the OLTP source flowed to bronze → silver (1 row
+rewritten, stamped with a real batch id, the other two untouched) → gold (every California store
+and customer versioned via SCD2, facts correctly reloading 0 rows), and a following run with no
+source changes loaded **0** fact rows instead of 447k.
 
 ---
 
@@ -342,7 +363,8 @@ The `docs/` tree is a first-class part of this project:
 
 | Area | Location |
 |---|---|
-| **Architecture Decision Records** (001–015) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Architecture Decision Records** (001–016) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Fix log** (root causes + the rules they generalize to) | [`docs/fix/fix_log.md`](docs/fix/fix_log.md) |
 | **Gold star schema** (ER diagram + querying guide) | [`docs/architecture/gold_star_schema.md`](docs/architecture/gold_star_schema.md) |
 | **Data dictionaries** (bronze / silver / gold / audit) | [`docs/data_dictionary/`](docs/data_dictionary/) |
 | **Source-to-target mappings** | [`docs/source_to_dw_mapping/`](docs/source_to_dw_mapping/) |
@@ -375,7 +397,7 @@ contracts.
 - [x] dbt data tests — 75 silver tests (`unique` / `not_null` / `accepted_values` / `relationships`) + source freshness SLA
 - [x] Gold layer — 8 dims (6 SCD2) + 3 facts + 3 date views, 64 tests (`v0.2.0-gold`)
 - [x] Governance — 15 ADRs, data dictionaries, mappings, load strategies
-- [ ] Wire the full pipeline end-to-end in Airflow with real batch IDs (activates the incremental fact loads)
+- [x] Wire the full pipeline end-to-end in Airflow with real batch IDs — incremental fact loads active
 - [ ] DRY the shared silver lineage/metadata block into a reusable macro
 - [ ] BI layer — connect Power BI/Tableau to the star schema
 

@@ -49,20 +49,7 @@ cleaned as (
         nullif(lower(trim(status_code)), '')::varchar(20)                            as silver_status_code,
         nullif(regexp_replace(trim(status_name), '\s+', ' ', 'g'), '')::varchar(50)  as silver_status_name,
 
-        -- ── source lineage carried forward from bronze ──────────────────────
-        bronze_source_system::varchar(100)         as silver_source_system,
-        bronze_source_table_name::varchar(150)     as silver_source_table_name,
-        status_code::text                          as silver_source_record_id,
-        created_at_source_timestamp::timestamp     as silver_source_created_at_timestamp,
-        updated_at_source_timestamp::timestamp     as silver_source_updated_at_timestamp,
-        bronze_record_id::bigint                   as silver_bronze_record_id,
-        bronze_batch_id::bigint                    as silver_bronze_batch_id,
-
-        -- ── silver's own metadata (stamped as this row is built) ────────────
-        {{ var('silver_batch_id', -1) }}::bigint   as silver_batch_id,
-        current_timestamp::timestamp               as silver_created_at_timestamp,
-        current_timestamp::timestamp               as silver_updated_at_timestamp,
-        bronze_is_deleted_flag::boolean            as silver_is_deleted_flag
+        {{ silver_lineage_and_metadata(source_record_id='status_code') }}
 
     from deduped
     where rn = 1

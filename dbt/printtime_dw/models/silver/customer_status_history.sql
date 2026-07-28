@@ -66,22 +66,7 @@ cleaned as (
         changed_by::bigint                         as silver_changed_by_employee_id,
         nullif(regexp_replace(trim(reason), '\s+', ' ', 'g'), '')::varchar(200) as silver_change_reason,
 
-        -- ── source lineage carried forward from bronze ──────────────────────
-        -- Insert-only audit rows: changed_at is the only source lifecycle time,
-        -- so it stands in for both source created and source updated.
-        bronze_source_system::varchar(100)         as silver_source_system,
-        bronze_source_table_name::varchar(150)     as silver_source_table_name,
-        status_history_id::text                    as silver_source_record_id,
-        changed_at_source_timestamp::timestamp     as silver_source_created_at_timestamp,
-        changed_at_source_timestamp::timestamp     as silver_source_updated_at_timestamp,
-        bronze_record_id::bigint                   as silver_bronze_record_id,
-        bronze_batch_id::bigint                    as silver_bronze_batch_id,
-
-        -- ── silver's own metadata (stamped as this row is built) ────────────
-        {{ var('silver_batch_id', -1) }}::bigint   as silver_batch_id,
-        current_timestamp::timestamp               as silver_created_at_timestamp,
-        current_timestamp::timestamp               as silver_updated_at_timestamp,
-        bronze_is_deleted_flag::boolean            as silver_is_deleted_flag
+        {{ silver_lineage_and_metadata(source_record_id='status_history_id', source_created_at='changed_at_source_timestamp', source_updated_at='changed_at_source_timestamp') }}
 
     from deduped
     where rn = 1

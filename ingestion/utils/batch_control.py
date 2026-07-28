@@ -25,6 +25,9 @@ from ingestion.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# audit.etl_batch_control.batch_id is VARCHAR(50) (see sql/audit DDL).
+_BATCH_ID_MAX_LEN = 50
+
 
 def start_batch(
     pipeline_name: str,
@@ -46,7 +49,14 @@ def start_batch(
     engine = engine or get_dw_engine()
     # Keep batch_id within VARCHAR(50): <target_table>:<epoch_micros>.
     # (pipeline_name is recorded separately in initiated_by.)
-    batch_id = f"{target_table}:{int(datetime.now().timestamp() * 1_000_000)}"
+    #
+    # The epoch suffix is what makes the id UNIQUE, so when target_table is long
+    # the readable prefix is what gets trimmed — never the suffix. Gold targets
+    # such as 'gold.fact_customer_behavior_snapshot' (36 chars) would otherwise
+    # overflow the column; the full name is still stored in target_table
+    # VARCHAR(100), so trimming the prefix loses no information.
+    suffix = f":{int(datetime.now().timestamp() * 1_000_000)}"
+    batch_id = f"{target_table[: _BATCH_ID_MAX_LEN - len(suffix)]}{suffix}"
     sql = text(
         """
         INSERT INTO audit.etl_batch_control

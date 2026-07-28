@@ -30,6 +30,20 @@ x-airflow-common: &airflow-common
     OLTP_DB: ${OLTP_DB}
     OLTP_USER: ${OLTP_USER}
     OLTP_PASSWORD: ${OLTP_PASSWORD}
+    # dbt connection (profiles.yml reads these) — dbt-core is installed in the
+    # Airflow image (Option A, same pinned versions as docker/dbt) so the DAG's
+    # BashOperator tasks can run dbt against the mounted project below.
+    DBT_HOST: postgres
+    DBT_PORT: "5432"
+    DBT_DATABASE: ${POSTGRES_DB}
+    DBT_USER: ${POSTGRES_USER}
+    DBT_PASSWORD: ${POSTGRES_PASSWORD}
+    DBT_SCHEMA: silver
+    # dbt writes logs/artifacts to an airflow-local dir: the mounted project's
+    # logs/ and target/ are owned by the dbt container's user (PermissionError
+    # otherwise), and this also keeps DAG artifacts from clobbering ad-hoc runs.
+    DBT_LOG_PATH: /opt/airflow/dbt_artifacts/logs
+    DBT_TARGET_PATH: /opt/airflow/dbt_artifacts/target
   extra_hosts:
     - "host.docker.internal:host-gateway"
   volumes:
@@ -38,6 +52,7 @@ x-airflow-common: &airflow-common
     - ./airflow/plugins:/opt/airflow/plugins
     - ./airflow/config:/opt/airflow/config
     - ./ingestion:/opt/airflow/ingestion      # Python ingestion layer available to DAGs
+    - ./dbt/printtime_dw:/dbt/printtime_dw    # dbt project, same path as the dbt service
   depends_on:
     postgres:
       condition: service_healthy

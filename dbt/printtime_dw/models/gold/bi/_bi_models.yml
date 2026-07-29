@@ -55,6 +55,12 @@ models:
       - name: payment_type_key
         data_tests: [unique, not_null]
 
+  - name: bi_dim_invoice
+    description: "Invoice dimension (SCD2). Slicing attributes: invoice number, PO number (for 'group payments by PO', backlog #10), status."
+    columns:
+      - name: invoice_key
+        data_tests: [unique, not_null]
+
   # ── Facts ───────────────────────────────────────────────────────────────
   - name: bi_fact_sales
     description: >
@@ -67,6 +73,9 @@ models:
         data_tests:
           - not_null
           - relationships: {to: ref('bi_dim_date'), field: date_key}
+      - name: invoice_key
+        data_tests:
+          - relationships: {to: ref('bi_dim_invoice'), field: invoice_key}
 
   - name: bi_fact_payments
     description: >

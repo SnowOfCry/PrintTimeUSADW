@@ -11,10 +11,14 @@ Flow:
         → complete_silver_batch     (marks the batch 'succeeded' + rows from run_results)
         → start_gold_batches        (one 'running' row per gold target)
         → run_dbt_gold              (dbt run --select gold)
+        → run_dbt_tests             (dbt test — GATES the watermark; fails the DAG on breakage)
         → complete_gold_batches     (marks them 'succeeded' → facts' watermark advances)
-        → run_dbt_tests             (dbt test on silver + gold; fails the DAG on breakage)
     end_pipeline
     fail_open_batches               (only when something failed: closes 'running' rows)
+
+Tests run BEFORE complete_gold_batches (HIGH-7): validation gates the watermark
+commit rather than trailing it, so a failing test holds the gold batches
+'running' and the facts' watermark does not advance past unvalidated data.
 
 Why the batch tasks matter (ADR-008 + gold load strategy):
 - Silver rows are stamped with silver_batch_id = the batch_key opened here, so
@@ -300,14 +304,25 @@ with DAG(
         doc_md="Marks gold batches succeeded — the facts' incremental watermark advances here.",
     )
 
-    # ── 4. dbt: data quality tests ───────────────────────────────────────────
+    # ── 4. dbt: data quality tests — GATE the gold watermark (HIGH-7) ────────
+    # Runs BEFORE complete_gold_batches, so a failing test leaves the gold
+    # batches 'running' (never 'succeeded') and the facts' watermark does not
+    # advance — the next run reprocesses instead of skipping bad data.
+    # DBT_TARGET_PATH is redirected here so `dbt test` does not overwrite the
+    # gold run's run_results.json, which complete_gold_batches reads next for its
+    # row counts.
     run_dbt_tests = BashOperator(
         task_id="run_dbt_tests",
         bash_command=(
             "cd " + DBT_PROJECT_DIR + " && "
+            "DBT_TARGET_PATH=/opt/airflow/dbt_artifacts/test_target "
             "dbt test --profiles-dir " + DBT_PROJECT_DIR + " --no-version-check"
         ),
-        doc_md="Runs all dbt tests on silver and gold. Fails the DAG if any test fails.",
+        doc_md=(
+            "Runs all dbt tests on silver and gold. Gates the gold watermark: "
+            "it runs before complete_gold_batches, so a failure holds the batches "
+            "'running' and the watermark does not advance."
+        ),
     )
 
     # ── 5. Failure sweeper ──────────────────────────────────────────────────
@@ -319,6 +334,17 @@ with DAG(
     )
 
     # ── Task dependencies ────────────────────────────────────────────────────
+    # Tests run AFTER run_dbt_gold but BEFORE complete_gold_batches (HIGH-7):
+    # validation must gate the watermark commit, not trail it. If a test fails,
+    # complete_gold_batches is skipped (upstream_failed), the gold batches stay
+    # 'running', fail_open_batches marks them 'failed', and the facts' watermark
+    # never advances — so the next run reprocesses rather than skipping bad data.
+    #
+    # complete_silver_batch stays before the tests on purpose: silver's watermark
+    # is row-based (each model reads max(silver_bronze_batch_id) from its own
+    # table), so it advances when run_dbt_silver writes rows regardless of the
+    # audit batch status. Its completion is bookkeeping, not a watermark gate,
+    # so there is nothing for the tests to hold back there.
     main_chain = [
         ingest_oltp_to_bronze,
         start_silver_batch,
@@ -326,8 +352,8 @@ with DAG(
         complete_silver_batch,
         start_gold_batches,
         run_dbt_gold,
-        complete_gold_batches,
         run_dbt_tests,
+        complete_gold_batches,
     ]
 
     start_pipeline >> main_chain[0]

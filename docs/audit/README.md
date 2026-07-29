@@ -49,7 +49,7 @@ Carried into round 002 and still open. See the round-002 report for full detail.
 
 | ID | Finding | First raised | Status |
 |---|---|---|---|
-| HIGH-7 | Data-quality tests run *after* `complete_gold_batches` commits the watermark, so a failing test neither blocks bad data nor notifies anyone | 002 | Open — ~2h fix, highest value available |
+| HIGH-7 | Data-quality tests run *after* `complete_gold_batches` commits the watermark, so a failing test neither blocks bad data nor notifies anyone | 002 | **Data-integrity part FIXED** (see [`fix_log.md` FIX-004](../fix/fix_log.md)) — tests now gate the watermark; proven a failed test holds it. Alerting still open (see HIGH-4). Pending re-score in round 003. |
 | HIGH-5 | No disaster recovery: no backup, no restore procedure, no RPO/RTO, nothing tested | 001 | Open — the sole gate on PRE-PRODUCTION |
 | HIGH-3 | SCD2 versions dated by load date, and facts resolve `is_current`, so point-in-time reporting is unachievable | 001 | Open |
 | HIGH-6 | One all-privilege database user for every service; ADR-013 §3 access model unimplemented | 001 | Open |

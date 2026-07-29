@@ -7,7 +7,66 @@ This is deliberately not a changelog. An entry earns its place only if the root 
 non-obvious or the fix taught a reusable rule. Newest first.
 
 **Related:** `docs/adr/` (decisions), `docs/dbt/dbt_decisions.md` (dbt implementation log),
-`docs/backlog.md` (deferred work).
+`docs/backlog.md` (deferred work), `docs/audit/` (external audits).
+
+---
+
+## FIX-004 — data-quality tests ran *after* the gold watermark was committed
+
+| | |
+|---|---|
+| **Found** | 2026-07-29, external audit round 002 (finding HIGH-7) |
+| **Symptom** | Latent — never observed. A failing gold test would fail the DAG *after* the bad data was already committed and the watermark had moved past it. |
+| **Affected** | `airflow/dags/printtime_elt_pipeline.py` — task ordering |
+| **Severity** | HIGH (data integrity); the highest-value item the audit found |
+
+### Cause
+
+The DAG chain ran `complete_gold_batches` *before* `run_dbt_tests`:
+
+```
+run_dbt_gold → complete_gold_batches → run_dbt_tests
+```
+
+`complete_gold_batches` marks the gold batches `succeeded`, and the facts' incremental watermark
+reads the *last succeeded* gold batch. So the watermark advanced **before** any test ran. A test
+failure then failed the DAG, but the bad rows were already in gold and the watermark had already
+moved past them — the next run would skip straight over the unvalidated data. With
+`email_on_failure: False` and no callback, the failure also notified no one. The pipeline
+committed state before it verified it.
+
+### Fix
+
+Reorder so validation gates the commit:
+
+```
+run_dbt_gold → run_dbt_tests → complete_gold_batches
+```
+
+Now a test failure leaves `complete_gold_batches` `upstream_failed`, the gold batches stay
+`running`, `fail_open_batches` marks them `failed`, and the watermark never advances — the next
+run reprocesses. One subtlety: `dbt test` overwrites `target/run_results.json`, which
+`complete_gold_batches` reads for its row counts, so the test run is redirected to a separate
+`DBT_TARGET_PATH` to leave the gold run's results intact.
+
+`complete_silver_batch` deliberately stays before the tests: silver's watermark is row-based
+(each model reads `max(silver_bronze_batch_id)` from its own table), so it advances when rows are
+written regardless of the audit batch status — its completion is bookkeeping, not a gate.
+
+### Proof
+
+Verified end to end, not just reasoned: captured the watermark (succeeded `fact_retail_sales`
+batch 338), added a temporary always-failing dbt test, and ran the DAG. `run_dbt_tests` failed →
+`complete_gold_batches` was skipped → the run's gold batches were swept to `failed` → **the
+watermark stayed at 338**, unmoved. Removing the test and re-running advanced it to 388. Before
+the fix, that failed run's batch would have been `succeeded` and the watermark would have moved.
+
+### Rule
+
+> **Validation must gate state commitment, not trail it.** A batch, watermark, or checkpoint may
+> be marked complete only *after* the data it covers has passed its checks — never before. If a
+> pipeline commits state before it verifies it, a failed check fails loudly while the bad data has
+> already escaped.
 
 ---
 

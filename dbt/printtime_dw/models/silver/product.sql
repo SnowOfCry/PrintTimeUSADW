@@ -1,3 +1,25 @@
+-- =============================================================================
+-- silver.product
+-- Source:  bronze.oltp_product
+-- Grain:   one row per product, current version
+--          (business key: silver_product_id)
+-- Purpose: clean current version of each product; feeds gold.dim_product and
+--          product attributes for gold.fact_retail_sales.
+-- Spec:    sql/silver/002_create_silver_tables.sql (silver.product)
+--          ADR-005 (cleaning standards), ADR-006 (dedup to one current row/key)
+--          docs/load_strategy/silver_incremental_merge_strategy.md (dedup order)
+--          docs/source_to_dw_mapping/Bronze_to_Silver_mapping.md §silver.product
+-- Notes:   - cost column is RENAMED across the hop: bronze unit_cost_amount ->
+--            silver_standard_cost_amount (the DDL name). It is the standard cost
+--            of the product, not a per-line cost — fact_retail_sales computes
+--            sales_cost from the invoice line's own unit cost, not from here.
+--          - silver_is_active_flag comes DIRECTLY from the source is_active_flag
+--            (already boolean at source, ADR-005 #5) — unlike silver.customer,
+--            which must derive its flag from a status string.
+--          - department_id and category_id are both carried. Gold resolves
+--            department via product.department_id (the single declared path);
+--            see the readiness review on the two-path ambiguity.
+-- =============================================================================
 {{ config(
     materialized='incremental',
     unique_key='silver_product_id',

@@ -1,3 +1,27 @@
+-- =============================================================================
+-- silver.customer
+-- Source:  bronze.oltp_customer
+-- Grain:   one row per customer, current state
+--          (business key: silver_customer_id)
+-- Purpose: clean current state of each customer; feeds gold.dim_customer and
+--          gold.fact_customer_behavior_snapshot.
+-- Spec:    sql/silver/002_create_silver_tables.sql (silver.customer)
+--          ADR-005 (cleaning, status vocabulary, derived flags), ADR-006 (merge)
+--          docs/load_strategy/silver_incremental_merge_strategy.md (dedup order)
+--          docs/source_to_dw_mapping/Bronze_to_Silver_mapping.md §silver.customer
+--          ADR-013 (PII classification)
+-- Notes:   - customer_status uses the closed lower-case vocabulary (ADR-005 #4):
+--            active, inactive — unmapped values become NULL.
+--          - two derived columns (ADR-005 #5):
+--            silver_customer_name = business name (case PRESERVED) when present,
+--              else the Title-Cased person name — the person-vs-business split.
+--            silver_is_active_flag = lower(trim(customer_status)) = 'active';
+--              derived from status because the source has no is_active column
+--              (unlike product/employee/store, which carry one directly).
+--          - silver_email and silver_phone_number are classified PII (ADR-013 §1).
+--            They stop at silver by design: gold.dim_customer carries neither, so
+--            BI never sees raw contact data (ADR-013 §2, data minimization).
+-- =============================================================================
 {{ config(
     materialized='incremental',
     unique_key='silver_customer_id',

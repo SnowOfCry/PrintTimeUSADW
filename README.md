@@ -366,6 +366,7 @@ The `docs/` tree is a first-class part of this project:
 | **Architecture Decision Records** (001–016) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
 | **Fix log** (root causes + the rules they generalize to) | [`docs/fix/fix_log.md`](docs/fix/fix_log.md) |
 | **Gold star schema** (ER diagram + querying guide) | [`docs/architecture/gold_star_schema.md`](docs/architecture/gold_star_schema.md) |
+| **BI layer** (Power BI DAX measures + build guide) | [`docs/bi/`](docs/bi/) — serving views in `models/gold/bi/` |
 | **Data dictionaries** (bronze / silver / gold / audit) | [`docs/data_dictionary/`](docs/data_dictionary/) |
 | **Source-to-target mappings** | [`docs/source_to_dw_mapping/`](docs/source_to_dw_mapping/) |
 | **Load strategies** (bronze / silver / gold) | [`docs/load_strategy/`](docs/load_strategy/) |
@@ -399,7 +400,8 @@ contracts.
 - [x] Governance — 16 ADRs, data dictionaries, mappings, load strategies, fix log
 - [x] Wire the full pipeline end-to-end in Airflow with real batch IDs — incremental fact loads active
 - [x] DRY the shared silver lineage/metadata block into a reusable macro (`silver_lineage_and_metadata`)
-- [ ] BI layer — connect Power BI/Tableau to the star schema
+- [x] BI serving layer — star-native `gold.bi_*` views + Power BI DAX/build guide (ADR-017)
+- [ ] Tableau version of the dashboards (same serving views — for the managers to compare)
 
 ---
 

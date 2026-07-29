@@ -1,8 +1,9 @@
-# PrintTimeUSA Data Warehouse — External Audit Report
+# PrintTimeUSA Data Warehouse — External Audit Report (Round 1)
 
 **Auditor role:** Independent Senior/Principal Data Engineer & DW Architect (external reviewer)
 **Date:** 2026-07-28
 **Scope:** Entire repository at commit `2b9433c` (v0.2.0-gold release)
+**Superseded by:** [002](002-external-dw-audit.md) at commit `15c1c52` — kept as the point-in-time record
 **Method:** `.claude/skills/dw-auditor/SKILL.md` — 20-phase evidence-based audit
 **Standard applied:** "Would an experienced Senior or Principal Data Engineer confidently approve this architecture for production?"
 

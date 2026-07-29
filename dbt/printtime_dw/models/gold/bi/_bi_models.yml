@@ -1,0 +1,95 @@
+version: 2
+
+# ── BI serving layer (ADR-017) ───────────────────────────────────────────────
+# A star-native semantic model for Power BI (Tableau to follow), materialized as
+# views over the gold star. Dimensions and facts stay SEPARATE so the conformed
+# dimensions (date, customer, store, cashier) cross-filter every fact and the
+# model stays small — the way Power BI's engine is built to work. Business
+# columns only; audit/DQ/SCD2 plumbing is hidden. Views read gold only (ADR-001).
+#
+# The unique + not_null tests on each surrogate key are the guard rail: a view is
+# only correct if it preserves its source's grain (no join fan-out).
+
+models:
+  # ── Dimensions ──────────────────────────────────────────────────────────
+  - name: bi_dim_date
+    description: "Conformed date dimension shared by all facts. Calendar attributes only."
+    columns:
+      - name: date_key
+        description: Surrogate key (YYYYMMDD). Relate facts' *date_key here.
+        data_tests: [unique, not_null]
+
+  - name: bi_dim_product
+    description: "Product dimension (SCD2, one row per version). is_current flags the live version."
+    columns:
+      - name: product_key
+        data_tests: [unique, not_null]
+
+  - name: bi_dim_customer
+    description: "Customer dimension (SCD2). customer_county is 'Not Provided' (ADR-014)."
+    columns:
+      - name: customer_key
+        data_tests: [unique, not_null]
+
+  - name: bi_dim_store
+    description: "Store/location dimension (SCD2). store_state is the full state name."
+    columns:
+      - name: store_key
+        data_tests: [unique, not_null]
+
+  - name: bi_dim_cashier
+    description: "Cashier dimension (SCD2) with assigned store denormalized on the row."
+    columns:
+      - name: cashier_key
+        data_tests: [unique, not_null]
+
+  - name: bi_dim_payment_method
+    description: "Payment-method dimension (SCD2): cash, cards, check, ACH, etc."
+    columns:
+      - name: payment_method_key
+        data_tests: [unique, not_null]
+
+  - name: bi_dim_payment_type
+    description: "Payment-type dimension (Type 1): deposit, balance, full, refund, adjustment."
+    columns:
+      - name: payment_type_key
+        data_tests: [unique, not_null]
+
+  # ── Facts ───────────────────────────────────────────────────────────────
+  - name: bi_fact_sales
+    description: >
+      Sales fact, invoice-line grain. FK keys + degenerate invoice_number +
+      additive measures. Gross margin % is a DAX measure, not a column.
+    columns:
+      - name: sales_line_key
+        data_tests: [unique, not_null]
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships: {to: ref('bi_dim_date'), field: date_key}
+
+  - name: bi_fact_payments
+    description: >
+      Payments fact, payment grain. Refunds are negative and flagged
+      (is_refund / payment_kind); SUM nets them — split on payment_kind, not the
+      sign (backlog #5).
+    columns:
+      - name: payment_key
+        data_tests: [unique, not_null]
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships: {to: ref('bi_dim_date'), field: date_key}
+
+  - name: bi_fact_customer_snapshot
+    description: >
+      Customer behavior, customer × snapshot-date grain. Semi-additive — slice to
+      one snapshot, never sum across dates. is_at_risk threshold (90 days) is a
+      BI-layer default, adjustable in the model (ADR-017).
+    columns:
+      - name: snapshot_key
+        data_tests: [unique, not_null]
+      - name: customer_key
+        data_tests:
+          - not_null
+          - relationships: {to: ref('bi_dim_customer'), field: customer_key}

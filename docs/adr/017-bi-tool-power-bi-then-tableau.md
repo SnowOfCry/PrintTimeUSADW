@@ -32,12 +32,22 @@ Two facts shape the decision:
 gold. Build a Tableau version of the same dashboards afterward, so the managers can compare the
 two front-ends on identical data and decide which to standardize on.**
 
-1. **BI serving layer (the real engineering).** A small set of report-ready views in the gold
-   schema, built as dbt models materialized as views (`gold.bi_sales`, `gold.bi_payments`,
-   `gold.bi_customer_snapshot`). Each pre-joins the star one hop per dimension, exposes
-   business-friendly column names, and encodes the metric logic **once** (margin, refund
-   direction, day counts, at-risk). Both front-ends consume these views, so the semantics are
-   shared and only the presentation differs. The views read gold only — ADR-001 upheld.
+1. **BI serving layer (the real engineering) — a star-native semantic model.** A set of views in
+   the gold schema, built as dbt models materialized as views, that expose the star **as a star**:
+   seven clean dimension views (`gold.bi_dim_date`, `bi_dim_product`, `bi_dim_customer`,
+   `bi_dim_store`, `bi_dim_cashier`, `bi_dim_payment_method`, `bi_dim_payment_type`) and three
+   fact views (`gold.bi_fact_sales`, `bi_fact_payments`, `bi_fact_customer_snapshot`). Dimensions
+   and facts stay **separate** — Power BI and Tableau are star-native, so keeping the conformed
+   dimensions distinct lets one date/customer/store slicer cross-filter every fact and keeps the
+   model small. Each view is business-named with the audit/DQ/SCD2 plumbing hidden; facts carry FK
+   keys + additive measures only (ratios like margin % are DAX measures, never row columns, so
+   they cannot aggregate wrong). Metric logic that must not drift — refund direction, day counts,
+   at-risk — is encoded **once** in SQL. The views read gold only (ADR-001 upheld), and every fact
+   key resolves to a dimension row via the `-1` members (ADR-011), so relationships have no blanks.
+
+   > An earlier draft used flat "one-big-table" views (each fact with its dimensions joined in).
+   > That was corrected: OBT discards the conformed dimensions the gold layer was built to provide
+   > and bloats the model — the opposite of what a star-native BI tool wants.
 
 2. **Power BI first.** Chosen over Tableau as the primary because Power BI Desktop is **free and
    stays free** (a portfolio/stakeholder artifact must remain openable indefinitely; Tableau
@@ -104,5 +114,5 @@ two front-ends on identical data and decide which to standardize on.**
 - ADR-001 (medallion — BI sees only gold; names Power BI/Tableau), ADR-002 (local Docker stack —
   the reproducibility tension), ADR-007/009/010/011 (gold modeling the views sit on)
 - `docs/architecture/gold_star_schema.md` — the star the serving views consume
-- The serving views: `dbt/printtime_dw/models/gold/bi_sales.sql`, `bi_payments.sql`,
-  `bi_customer_snapshot.sql`
+- The serving views: `dbt/printtime_dw/models/gold/bi/` — seven `bi_dim_*` and three `bi_fact_*`
+  views, documented in `_bi_models.yml`

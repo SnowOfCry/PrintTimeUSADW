@@ -71,3 +71,11 @@ Desktop.ini
 docs/_build/
 site/
 sql/oltp/oltp_seed.sql
+
+# --- Local-only: data-generation tooling + synthetic source data (privacy) ---
+data_generation/
+
+# --- Power BI / Tableau workbooks (binary; embed a cached copy of the data) ---
+*.pbix
+*.twb
+*.twbx

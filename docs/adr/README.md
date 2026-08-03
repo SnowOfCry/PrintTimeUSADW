@@ -27,6 +27,7 @@ PrintTimeUSA Data Warehouse. Each ADR captures one significant decision — its 
 | [015](015-gold-scd2-dbt-implementation.md) | Gold SCD2 dimensions — custom incremental dbt model (append + post-hooks) over dbt snapshots | Accepted | Erick Palma |
 | [016](016-run-dbt-inside-the-airflow-image.md) | Run dbt inside the Airflow image (BashOperator) rather than DockerOperator | Accepted | Erick Palma |
 | [017](017-bi-tool-power-bi-then-tableau.md) | Power BI as the BI tool on a tool-agnostic serving layer; Tableau version to follow for the managers to decide | Accepted | Erick Palma |
+| [018](018-disaster-recovery-and-backup.md) | Disaster recovery — tested logical backup/restore, backed by medallion reproducibility (closes audit HIGH-5) | Accepted | Erick Palma |
 
 ## Reading order
 
@@ -35,6 +36,7 @@ PrintTimeUSA Data Warehouse. Each ADR captures one significant decision — its 
 - **Gold modeling details:** 009 (lean facts) · 010 (date views) · 011 (Not Provided members) · 015 (SCD2 dbt implementation)
 - **Orchestration:** 016 (how Airflow runs dbt)
 - **BI / serving:** 017 (Power BI on a gold serving layer; Tableau to follow)
+- **Operations / DR:** 018 (backup, restore, and reproducibility)
 - **Cross-cutting:** 012 (data quality) · 013 (governance/PII) · 014 (customer_county gap)
 
 ## Adding a new ADR

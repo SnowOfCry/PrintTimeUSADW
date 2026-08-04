@@ -71,21 +71,3 @@ jobs:
 
       - name: Validate docker-compose.yml syntax
         run: docker compose config --quiet
-
-  # ── SonarQube Scan (optional) ─────────────────────────────────────────────
-  # Uncomment this job and add SONAR_TOKEN as a GitHub Actions secret to enable.
-  #
-  # sonarqube:
-  #   name: SonarQube Scan
-  #   runs-on: ubuntu-latest
-  #   needs: unit-tests
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0       # Required for SonarQube blame data
-  #
-  #     - name: SonarQube Scan
-  #       uses: SonarSource/sonarqube-scan-action@v2
-  #       env:
-  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

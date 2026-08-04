@@ -68,8 +68,11 @@ Applied to the live warehouse and each boundary tested:
    (Alternative 2) for an internal on-prem DW. Schema-level `USAGE` denial already
    makes BI's PII exposure structurally impossible.
 3. **Separate databases per service (Airflow metadata, SonarQube).** The audit's
-   phase-2 recommendation. Out of scope here (phase 1 = the role split); SonarQube
-   holding warehouse-owner creds and the shared Airflow-metadata DB remain open.
+   phase-2 recommendation. Out of scope here (phase 1 = the role split). Since
+   addressed in part by **removing SonarQube** (2026-08-04) — it was unused (its CI
+   scan was never enabled) and, as a third-party app holding warehouse-owner creds,
+   was pure liability; the DW's real quality gate is its 160+ dbt tests. Only the
+   shared Airflow-metadata DB co-tenancy remains open.
 
 ## Consequences
 
@@ -81,8 +84,9 @@ Applied to the live warehouse and each boundary tested:
 - Reproducible and idempotent: `apply_roles.sh` re-runs safely as models evolve.
 
 **Negative / accepted gaps** *(honest — the next steps)*
-- **Database separation not done** (phase 2): Airflow metadata still shares the
-  warehouse DB, and SonarQube still holds owner creds.
+- **Database separation not fully done** (phase 2): Airflow metadata still shares
+  the warehouse DB. (SonarQube — the other co-tenant that held owner creds — was
+  removed 2026-08-04, closing that part of the gap.)
 - Passwords are dev-grade (`changeme_*`) in the local `.env`; production should use a
   secrets manager. On-prem, not-internet-exposed posture (ADR-002) bounds the risk.
 - On a **from-scratch rebuild**, roles must be applied *after* the layer DDL exists

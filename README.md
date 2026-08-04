@@ -37,7 +37,7 @@ in Docker.
 | Ingestion (Extract + Load) | Python 3.11 (pandas, SQLAlchemy) |
 | Orchestration | Apache Airflow 2.9 |
 | Database GUI | pgAdmin 4 |
-| Code quality | SonarQube, ruff, mypy, pytest (CI on every push) |
+| Code quality | ruff, mypy, pytest + 160+ dbt data tests (CI on every push) |
 | Runtime | Docker + Docker Compose |
 
 ---
@@ -127,7 +127,7 @@ match to the cent, with zero unresolved dimension keys. See the
 
 ```
 PrintTimeUSADW/
-├── docker/                          Docker build contexts (postgres, airflow, dbt, sonarqube)
+├── docker/                          Docker build contexts (postgres, airflow, dbt)
 ├── airflow/
 │   └── dags/printtime_elt_pipeline.py   ELT pipeline DAG
 ├── ingestion/                       Python Extract + Load (no business logic)
@@ -197,7 +197,6 @@ bash scripts/reset.sh          # DESTRUCTIVE — removes all data volumes
 | `airflow-scheduler` | Airflow 2.9 (custom) | — | DAG scheduling |
 | `airflow-init` | Airflow 2.9 (custom) | — | One-time DB migration + admin user |
 | `dbt` | Python 3.11 (custom) | — | dbt Core + dbt-postgres (run ad-hoc) |
-| `sonarqube` | sonarqube community | 9000 | Code quality analysis |
 
 All services share one Docker bridge network, `elt_network`. Inside the network, containers
 reach Postgres at `postgres:5432`; from your host, use `localhost:5433`.
@@ -210,7 +209,6 @@ reach Postgres at `postgres:5432`; from your host, use `localhost:5433`.
 |---|---|---|
 | pgAdmin | http://localhost:5050 | `admin@printtime.local` / `changeme_pgadmin` |
 | Airflow | http://localhost:8080 | `admin` / `changeme_admin` |
-| SonarQube | http://localhost:9000 | `admin` / `admin` (first login) |
 | PostgreSQL | `localhost:5433` | `warehouse_user` / `changeme_warehouse` |
 
 > These are development defaults. **Change every password before using real data.**
@@ -405,5 +403,5 @@ contracts.
 
 ---
 
-*PrintTimeUSA Data Warehouse — built with PostgreSQL, dbt Core, Apache Airflow, pgAdmin, and
-SonarQube, running in Docker.*
+*PrintTimeUSA Data Warehouse — built with PostgreSQL, dbt Core, Apache Airflow, and pgAdmin,
+running in Docker.*

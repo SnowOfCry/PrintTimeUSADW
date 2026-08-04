@@ -2,8 +2,8 @@
 # =============================================================================
 # reset.sh — DESTRUCTIVE: Stop and remove all containers AND volumes.
 # Use this to completely wipe the stack and start fresh.
-# All PostgreSQL data, Airflow metadata, pgAdmin config, and SonarQube
-# data will be permanently deleted.
+# All PostgreSQL data, Airflow metadata, and pgAdmin config will be
+# permanently deleted.
 # =============================================================================
 set -euo pipefail
 
@@ -18,7 +18,6 @@ echo "⚠  WARNING: This will DELETE all Docker volumes including:"
 echo "   - PostgreSQL data warehouse data"
 echo "   - Airflow metadata database"
 echo "   - pgAdmin configuration"
-echo "   - SonarQube data and analysis results"
 echo ""
 read -r -p "   Are you sure you want to continue? (yes/no): " CONFIRM
 

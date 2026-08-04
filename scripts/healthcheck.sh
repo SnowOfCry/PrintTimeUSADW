@@ -49,15 +49,6 @@ else
 fi
 echo ""
 
-# ── SonarQube ─────────────────────────────────────────────────────────────────
-echo "── SonarQube ──────────────────────────────────────────"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9000 2>/dev/null || echo "000")
-if [[ "$HTTP_CODE" == "200" ]]; then
-  echo "  ✔  SonarQube is available at http://localhost:9000"
-else
-  echo "  ✘  SonarQube not responding (HTTP $HTTP_CODE) — may take 2-3 min to start"
-fi
-echo ""
 
 # ── Docker volume summary ──────────────────────────────────────────────────────
 echo "── Docker Volumes ─────────────────────────────────────"

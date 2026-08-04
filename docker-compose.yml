@@ -180,40 +180,12 @@ services:
     # Override at runtime: docker compose run dbt dbt run --select silver
     command: ["dbt", "debug"]
 
-  # ---------------------------------------------------------------------------
-  # SonarQube Community Edition — code quality analysis
-  # ---------------------------------------------------------------------------
-  sonarqube:
-    image: sonarqube:10.6-community
-    container_name: printtime_sonarqube
-    restart: unless-stopped
-    environment:
-      SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      SONAR_JDBC_USERNAME: ${POSTGRES_USER}
-      SONAR_JDBC_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "9000:9000"
-    volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_logs:/opt/sonarqube/logs
-      - sonarqube_extensions:/opt/sonarqube/extensions
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - elt_network
-    # SonarQube requires this kernel setting on Linux hosts:
-    # sudo sysctl -w vm.max_map_count=524288
-
 # =============================================================================
 # Persistent Volumes
 # =============================================================================
 volumes:
   postgres_data:
   pgadmin_data:
-  sonarqube_data:
-  sonarqube_logs:
-  sonarqube_extensions:
 
 # =============================================================================
 # Shared Network

@@ -70,16 +70,23 @@ keyed as (
         -- carried only to resolve the refund chain below; not stored (ADR-009)
         p.silver_parent_payment_id                       as parent_payment_id
     from source_payments p
-    left join {{ ref('dim_invoice') }}        di    on di.source_record_id    = p.silver_invoice_id::varchar        and di.is_current
-    left join {{ ref('dim_customer') }}       dc    on dc.source_record_id    = p.silver_customer_id::varchar       and dc.is_current
-    left join {{ ref('dim_payment_method') }} dpm   on dpm.source_record_id   = p.silver_payment_method_id::varchar and dpm.is_current
+    -- SCD2 keys resolved by EFFECTIVE DATE (audit HIGH-3): the version in effect on
+    -- the payment date — [valid_from, valid_to) — not the entity's current version.
+    left join {{ ref('dim_invoice') }}        di    on di.source_record_id    = p.silver_invoice_id::varchar
+                and p.silver_payment_date >= di.valid_from  and (p.silver_payment_date < di.valid_to  or di.valid_to  is null)
+    left join {{ ref('dim_customer') }}       dc    on dc.source_record_id    = p.silver_customer_id::varchar
+                and p.silver_payment_date >= dc.valid_from  and (p.silver_payment_date < dc.valid_to  or dc.valid_to  is null)
+    left join {{ ref('dim_payment_method') }} dpm   on dpm.source_record_id   = p.silver_payment_method_id::varchar
+                and p.silver_payment_date >= dpm.valid_from and (p.silver_payment_date < dpm.valid_to or dpm.valid_to is null)
     left join {{ ref('dim_date') }}           dd    on dd.date                = p.silver_payment_date
     -- dim_payment_type is Type 1 and keyed on type_code, so hop through silver
     -- to translate the payment's type id into that code.
     left join {{ ref('payment_type') }}       spt   on spt.silver_payment_type_id = p.silver_payment_type_id
     left join {{ ref('dim_payment_type') }}   dpt   on dpt.type_code          = spt.silver_type_code
-    left join {{ ref('dim_cashier') }}        dcash on dcash.source_record_id = p.silver_employee_id::varchar       and dcash.is_current
-    left join {{ ref('dim_store') }}          ds    on ds.source_record_id    = p.silver_store_id::varchar          and ds.is_current
+    left join {{ ref('dim_cashier') }}        dcash on dcash.source_record_id = p.silver_employee_id::varchar
+                and p.silver_payment_date >= dcash.valid_from and (p.silver_payment_date < dcash.valid_to or dcash.valid_to is null)
+    left join {{ ref('dim_store') }}          ds    on ds.source_record_id    = p.silver_store_id::varchar
+                and p.silver_payment_date >= ds.valid_from  and (p.silver_payment_date < ds.valid_to  or ds.valid_to  is null)
 ),
 
 -- 3) dbt-managed surrogate key (decision #7), continuing from the current max.

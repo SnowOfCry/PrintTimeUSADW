@@ -11,6 +11,38 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-005 — SCD2 was Type-1 in disguise: load-date dating + `is_current` fact joins
+
+| | |
+|---|---|
+| **Found** | 2026-07-28, external audit round 002 (finding HIGH-3) |
+| **Symptom** | Latent — every entity currently has one version, so results looked right. The bug only bites once a dimension attribute changes. |
+| **Affected** | all six SCD2 dims (`dim_customer/store/cashier/product/invoice/payment_method`) + `fact_retail_sales`, `fact_payments`, `fact_customer_behavior_snapshot` |
+| **Severity** | HIGH (modeling correctness) |
+
+### Cause
+
+Two mistakes that together defeated the whole point of Type 2:
+
+1. **Versions were dated by load date.** `valid_from = CURRENT_DATE` and the post-hook closed the old version at `CURRENT_DATE` — so a version's validity window recorded *when the ETL ran*, not *when the change happened*. A change loaded a week late (or backfilled) was dated a week late.
+2. **Facts resolved keys on `is_current`.** Every fact joined the dimension `AND dim.is_current`, grabbing the entity's **latest** version regardless of when the event occurred. A 2020 sale for a customer renamed in 2023 would be attributed to the 2023 name. This is Type-1 (overwrite) behaviour wearing a Type-2 costume — the storage cost of history with none of the accuracy.
+
+The reason it was invisible: with exactly one version per entity, `is_current` *is* the only version, so the numbers happened to be right. The defect is structural, not observable in the current data.
+
+### Fix
+
+- **Date versions by the source effective date.** New version `valid_from = silver_source_updated_at_timestamp::date`; the post-hook closes the prior version at the **next** version's `valid_from` → contiguous half-open windows `[valid_from, valid_to)`. The initial version uses a low-watermark `DATE '1900-01-01'` (the source has no pre-load history), so it covers all facts predating the first change.
+- **Resolve fact keys by effective date.** Replace `AND dim.is_current` with `event_date >= dim.valid_from AND (event_date < dim.valid_to OR dim.valid_to IS NULL)`, `-1` fallback intact.
+- **Guard test** `assert_scd2_one_current_version_per_entity` so an entity can never again end up with 0 or 2 current versions.
+
+Proven by renaming a customer effective 2023-06-15: pre-date sales stayed with the old version, post-date sales moved to the new one; reconciliation-to-the-cent stayed green. See ADR-015 (Correction, 2026-08-04).
+
+### Class of mistake
+
+**Building the machinery but not the semantics.** The SCD2 scaffolding (versions, `valid_from/to`, `is_current`, `row_version`) was all present and *looked* complete, so it passed casual review — but the two operations that give it meaning (effective-date *dating* and effective-date *lookup*) were both keyed off the wrong thing. Lesson: for a temporal model, test it *with* a change, not just at rest — a Type-2 dimension with no second version can't tell you whether it's actually Type 2.
+
+---
+
 ## FIX-004 — data-quality tests ran *after* the gold watermark was committed
 
 | | |

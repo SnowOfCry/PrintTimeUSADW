@@ -20,9 +20,20 @@ Two hard constraints frame the choice:
 **Build each Type 2 dimension as a custom incremental dbt model** with `incremental_strategy='append'` plus post-hooks, matching the gold DDL exactly.
 
 - **Match on the durable source id.** SCD2 compares the incoming silver row to the dimension's current version (`is_current = TRUE`) on **`source_record_id`** (the durable source primary id — `silver_product_id`, `silver_customer_id`, …), **not** a mutable display code (`sku_number`, `store_code`). A code change then correctly produces a new *version*, never an orphaned entity.
-- **Append, not merge.** A changed entity gets a **new version row** inserted (`row_version + 1`, `is_current = TRUE`, `valid_from = CURRENT_DATE`, `valid_to = NULL`); the prior row is untouched by the insert. Merge (upsert) would overwrite the prior row in place — collapsing Type 2 into Type 1 and destroying history.
-- **Post-hook — close superseded versions.** After the append, `UPDATE {{ this }} SET is_current = FALSE, valid_to = CURRENT_DATE WHERE is_current AND a higher row_version now exists for that source_record_id`.
+- **Append, not merge.** A changed entity gets a **new version row** inserted (`row_version + 1`, `is_current = TRUE`, `valid_to = NULL`); the prior row is untouched by the insert. Merge (upsert) would overwrite the prior row in place — collapsing Type 2 into Type 1 and destroying history.
+- **Post-hook — close superseded versions.** After the append, `UPDATE {{ this }} SET is_current = FALSE, valid_to = <the next version's valid_from> WHERE is_current AND the immediately-next row_version now exists for that source_record_id` — producing contiguous, non-overlapping half-open windows `[valid_from, valid_to)`.
 - **Change within a version** is detected by `record_hash IS DISTINCT FROM` the current version's hash, computed over the tracked attributes only (same principle as the silver hash gate, ADR-006).
+
+### Correction (2026-08-04): effective dating — closes audit HIGH-3
+
+The original pattern above dated versions by **load date** (`valid_from = CURRENT_DATE`, and the post-hook closed the old version at `CURRENT_DATE`), and the **facts resolved dimension keys on `is_current`**. Both were wrong and were flagged as audit **HIGH-3**: they gave the *storage cost* of Type 2 with *Type 1 semantics* — a version's window reflected when the ETL ran, not when the change happened, and every historical fact silently pointed at the entity's **latest** attributes.
+
+Corrected as follows:
+
+- **Versions are dated by the source effective date, never the load date.** A new version's `valid_from = silver_source_updated_at_timestamp::date` (when the change actually happened). The post-hook closes the prior version at the **next version's** `valid_from`, so windows are contiguous and non-overlapping. The **initial** version (first load) uses a low-watermark `valid_from = DATE '1900-01-01'`, because the source carries only current state with no pre-load history — so v1 correctly covers every fact that predates the first real change. (If the source ever provides a true business-effective date, use it in place of the low-watermark.)
+- **Facts resolve keys by effective date, not `is_current`.** Each fact joins the dimension version whose `[valid_from, valid_to)` window contains the **event date** (invoice date / payment date / snapshot date), falling back to the `-1` member if nothing matches (ADR-011). A sale now carries the attributes that were true **when it happened**.
+
+Proven end-to-end: a customer renamed effective 2023-06-15 splits cleanly — pre-2023-06-15 sales resolve to the old version, later sales to the new one — where `is_current` would have relabelled the entire history. Guarded by the singular test `assert_scd2_one_current_version_per_entity`.
 
 ### Surrogate keys are dbt-managed integers, not a DB identity (decision #7)
 

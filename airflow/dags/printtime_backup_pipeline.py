@@ -34,8 +34,12 @@ DEFAULT_ARGS = {
 }
 
 BACKUP_DIR = "/opt/airflow/backups"
-# Warehouse connection comes from the DW_* env vars set in docker-compose.
-CONN = '-h "$DW_HOST" -p "$DW_PORT" -U "$DW_USER"'
+# Backup/restore is an ADMIN operation: pg_dump must read EVERY schema and the
+# verify step must createdb/dropdb — privileges the least-privilege ELT roles
+# (pt_ingestion / pt_dbt) deliberately do NOT have (RBAC, ADR-019). So this DAG
+# connects with the dedicated admin credentials (BACKUP_DB_*), not DW_*. Host/
+# port/target-db still come from the shared DW_* vars.
+CONN = '-h "$DW_HOST" -p "$DW_PORT" -U "$BACKUP_DB_USER"'
 RETAIN = 7
 VERIFY_DB = "dr_verify"
 # Table used to prove the restore worked (any stable table is fine).
@@ -48,7 +52,7 @@ mkdir -p {BACKUP_DIR}
 TS=$(date +%Y%m%d_%H%M%S)
 ARCHIVE="{BACKUP_DIR}/${{DW_DB}}_${{TS}}.dump"
 echo "Backing up $DW_DB -> $ARCHIVE"
-PGPASSWORD="$DW_PASSWORD" pg_dump {CONN} -d "$DW_DB" -Fc --no-owner --no-privileges > "$ARCHIVE"
+PGPASSWORD="$BACKUP_DB_PASSWORD" pg_dump {CONN} -d "$DW_DB" -Fc --no-owner --no-privileges > "$ARCHIVE"
 BYTES=$(wc -c < "$ARCHIVE")
 if [ "$BYTES" -lt 1000 ]; then echo "ERROR: empty backup ($BYTES b)"; rm -f "$ARCHIVE"; exit 1; fi
 echo "✓ backup complete: $(du -h "$ARCHIVE" | cut -f1)"
@@ -60,7 +64,7 @@ echo "backups on disk:"; ls -1t {BACKUP_DIR}/${{DW_DB}}_*.dump | head -{RETAIN}
 # ── Task 2: verify the fresh backup restores + reconciles ─────────────────────
 VERIFY_CMD = f"""
 set -euo pipefail
-export PGPASSWORD="$DW_PASSWORD"
+export PGPASSWORD="$BACKUP_DB_PASSWORD"
 LATEST=$(ls -1t {BACKUP_DIR}/${{DW_DB}}_*.dump | head -1)
 echo "Verifying restorability of $LATEST"
 # --force terminates any stray session so the drop can't get stuck.

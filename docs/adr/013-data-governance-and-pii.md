@@ -38,6 +38,8 @@ Keep raw PII (email, phone) **out of the Gold/BI layer.** The star schema alread
 
 Implemented with PostgreSQL roles/grants: a read-only role on the `gold` schema for BI consumers; `bronze`/`silver` (which hold PII) restricted to engineering.
 
+> **Implemented in ADR-019** (2026-08-04): split into three least-privilege LOGIN roles — `pt_ingestion` (bronze+audit write), `pt_dbt` (owns silver+gold), `pt_bi_reader` (gold SELECT only). `pt_bi_reader` has no `USAGE` on silver/bronze, so the PII-minimization above is now **enforced**, not just documented. See `sql/security/001_create_roles.sql`. Closes audit HIGH-6.
+
 ### 4. Retention & right-to-deletion (the bronze tension)
 A verified CCPA deletion request is the **one sanctioned exception to bronze's append-only immutability** (ADR-004). On a validated request:
 

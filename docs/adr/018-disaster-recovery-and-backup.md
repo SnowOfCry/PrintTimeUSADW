@@ -48,11 +48,19 @@ reproducibility as the fallback recovery path.**
 | **RPO** (max data loss) | **≤ 24h** | Daily backups; and because the OLTP source retains the data and the pipeline re-ingests, a lost day is **recoverable by re-running the pipeline**, not just by restoring. |
 | **RTO** (time to recover) | **~minutes** | Measured: restoring the ~28 MB warehouse into a scratch DB took **~61 seconds**. Full rebuild from bronze via dbt is the fallback (single-digit minutes at current volume). |
 
-### Scheduling
+### Scheduling & automated verification
 
-Backups are automated by scheduling `backup_warehouse.sh` — either via host cron or a dedicated
-Airflow DAG (`@daily`, before the ELT run so a bad load can't corrupt the only backup). The
-script is idempotent and self-pruning, so scheduling it is a one-line change.
+Backups are **automated by a dedicated Airflow DAG** — `airflow/dags/printtime_backup_pipeline.py`,
+scheduled daily at 03:00 (after the nightly ELT has validated its load, so each backup captures a
+known-good state). Because Airflow can't `docker exec` into the postgres container (no Docker
+socket — ADR-016), the DAG runs the postgres client tools (installed in the Airflow image, pinned
+to `postgresql-client-16` to match the server) against the warehouse over the docker network;
+archives land on the host via a `./backups` bind mount.
+
+The DAG has **two tasks**: `backup_warehouse` (pg_dump + retention) → `verify_restore`. The second
+is the important one: it **restores the fresh backup into a scratch database and confirms the row
+counts tie out**, so an unrestorable backup *fails the DAG*. An untested backup is not a backup —
+here every backup is tested automatically. (The shell scripts remain for manual/ad-hoc use.)
 
 ## Alternatives considered
 
@@ -80,8 +88,6 @@ script is idempotent and self-pruning, so scheduling it is a one-line change.
 - **Not offsite.** Backups sit on the same host (`./backups`, git-ignored) — this violates 3-2-1.
   Next step: sync to object storage (S3) so a host loss doesn't take the backups with it.
 - **No point-in-time recovery** — RPO is a day, not a second. Acceptable for daily batch.
-- **Scheduling is manual until the cron/Airflow job is wired** — the script exists and is tested;
-  automating the *cadence* is the remaining step.
 - The **OLTP source's** own backup is out of scope (it's the operational system of record).
 
 ## Related

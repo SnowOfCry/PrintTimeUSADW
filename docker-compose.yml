@@ -18,12 +18,18 @@ x-airflow-common: &airflow-common
     AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
     # Make the mounted ingestion package importable from DAGs and tasks
     PYTHONPATH: /opt/airflow
-    # Forward warehouse connection to DAGs
+    # Forward warehouse connection to DAGs. The ELT ingestion/control tasks use
+    # the LEAST-PRIVILEGE pt_ingestion role (bronze+audit write only — RBAC,
+    # ADR-019). The backup DAG needs admin (dump-all + createdb/dropdb) so it
+    # uses BACKUP_DB_* below, not these.
     DW_HOST: postgres
     DW_PORT: "5432"
     DW_DB: ${POSTGRES_DB}
-    DW_USER: ${POSTGRES_USER}
-    DW_PASSWORD: ${POSTGRES_PASSWORD}
+    DW_USER: pt_ingestion
+    DW_PASSWORD: ${PT_INGESTION_PASSWORD}
+    # Admin connection for the backup/restore DAG only (privileged by necessity).
+    BACKUP_DB_USER: ${POSTGRES_USER}
+    BACKUP_DB_PASSWORD: ${POSTGRES_PASSWORD}
     # Forward OLTP source connection to DAGs (host's local PostgreSQL)
     OLTP_HOST: ${OLTP_HOST}
     OLTP_PORT: ${OLTP_PORT}
@@ -36,8 +42,8 @@ x-airflow-common: &airflow-common
     DBT_HOST: postgres
     DBT_PORT: "5432"
     DBT_DATABASE: ${POSTGRES_DB}
-    DBT_USER: ${POSTGRES_USER}
-    DBT_PASSWORD: ${POSTGRES_PASSWORD}
+    DBT_USER: pt_dbt
+    DBT_PASSWORD: ${PT_DBT_PASSWORD}
     DBT_SCHEMA: silver
     # dbt writes logs/artifacts to an airflow-local dir: the mounted project's
     # logs/ and target/ are owned by the dbt container's user (PermissionError
@@ -160,8 +166,8 @@ services:
       DBT_HOST: postgres
       DBT_PORT: "5432"
       DBT_DATABASE: ${POSTGRES_DB}
-      DBT_USER: ${POSTGRES_USER}
-      DBT_PASSWORD: ${POSTGRES_PASSWORD}
+      DBT_USER: pt_dbt            # least-privilege: owns silver+gold, reads bronze (ADR-019)
+      DBT_PASSWORD: ${PT_DBT_PASSWORD}
       DBT_SCHEMA: silver          # default target schema; overridden per model
     volumes:
       - ./dbt/printtime_dw:/dbt/printtime_dw

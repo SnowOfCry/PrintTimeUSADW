@@ -66,8 +66,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_cashier (
     etl_batch_id VARCHAR(50),
     etl_load_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     etl_updated_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    valid_from DATE,
-    valid_to DATE,
+    valid_from DATE,   -- SCD2 window start: source effective date, not load date (audit HIGH-3 / ADR-015)
+    valid_to DATE,     -- SCD2 window end: exclusive, = next version's valid_from; NULL = open
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
     row_version INTEGER NOT NULL DEFAULT 1,
     is_complete BOOLEAN NOT NULL DEFAULT TRUE,
@@ -105,8 +105,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_product (
     etl_batch_id VARCHAR(50),
     etl_load_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     etl_updated_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    valid_from DATE,
-    valid_to DATE,
+    valid_from DATE,   -- SCD2 window start: source effective date, not load date (audit HIGH-3 / ADR-015)
+    valid_to DATE,     -- SCD2 window end: exclusive, = next version's valid_from; NULL = open
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
     row_version INTEGER NOT NULL DEFAULT 1,
     is_complete BOOLEAN NOT NULL DEFAULT TRUE,
@@ -144,8 +144,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_customer (
     etl_batch_id VARCHAR(50),
     etl_load_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     etl_updated_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    valid_from DATE,
-    valid_to DATE,
+    valid_from DATE,   -- SCD2 window start: source effective date, not load date (audit HIGH-3 / ADR-015)
+    valid_to DATE,     -- SCD2 window end: exclusive, = next version's valid_from; NULL = open
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
     row_version INTEGER NOT NULL DEFAULT 1,
     is_complete BOOLEAN NOT NULL DEFAULT TRUE,
@@ -183,8 +183,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_store (
     etl_batch_id VARCHAR(50),
     etl_load_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     etl_updated_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    valid_from DATE,
-    valid_to DATE,
+    valid_from DATE,   -- SCD2 window start: source effective date, not load date (audit HIGH-3 / ADR-015)
+    valid_to DATE,     -- SCD2 window end: exclusive, = next version's valid_from; NULL = open
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
     row_version INTEGER NOT NULL DEFAULT 1,
     is_complete BOOLEAN NOT NULL DEFAULT TRUE,
@@ -222,8 +222,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_invoice (
     etl_batch_id VARCHAR(50),
     etl_load_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     etl_updated_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    valid_from DATE,
-    valid_to DATE,
+    valid_from DATE,   -- SCD2 window start: source effective date, not load date (audit HIGH-3 / ADR-015)
+    valid_to DATE,     -- SCD2 window end: exclusive, = next version's valid_from; NULL = open
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
     row_version INTEGER NOT NULL DEFAULT 1,
     is_complete BOOLEAN NOT NULL DEFAULT TRUE,
@@ -256,8 +256,8 @@ CREATE TABLE IF NOT EXISTS gold.dim_payment_method (
     etl_batch_id VARCHAR(50),
     etl_load_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     etl_updated_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    valid_from DATE,
-    valid_to DATE,
+    valid_from DATE,   -- SCD2 window start: source effective date, not load date (audit HIGH-3 / ADR-015)
+    valid_to DATE,     -- SCD2 window end: exclusive, = next version's valid_from; NULL = open
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
     row_version INTEGER NOT NULL DEFAULT 1,
     is_complete BOOLEAN NOT NULL DEFAULT TRUE,

@@ -88,7 +88,7 @@ Source: **silver.payment_method**
 | is_active | direct | silver.payment_method.silver_is_active_flag. |
 | record_hash | generate | SHA-256 of tracked attributes. |
 | source_system / source_record_id / etl_batch_id / etl_load_timestamp / etl_updated_timestamp | generate | Audit block (`source_record_id` = silver_payment_method_id as text). |
-| valid_from / valid_to / is_current / row_version | generate | SCD2 block. |
+| valid_from / valid_to / is_current / row_version | generate | SCD2 block. `valid_from` = source effective date (`silver_source_updated_at_timestamp`), low-watermark (`1900-01-01`) on the initial version; the close post-hook sets `valid_to` to the next version's `valid_from` → half-open `[valid_from, valid_to)` windows (audit HIGH-3). |
 | is_complete / is_validated / dq_issue_flag / dq_issue_description | generate | DQ block. |
 | is_deleted / deleted_timestamp | derive / generate | From silver_is_deleted_flag. |
 
@@ -291,5 +291,5 @@ Source: **silver.customer** + aggregates over **silver.invoice** / **silver.paym
 - **`dim_customer.customer_county` has no source** anywhere in OLTP → Bronze → Silver. It is generated as `'Not Provided'` until a county reference (e.g. a ZIP→county lookup) is introduced. This is the only Gold column with no traceable source.
 - **`record_hash` is SHA-256 (`CHAR(64)`)** in Gold, whereas Bronze/Silver use unbounded-text hashes (`bronze_row_hash` / `silver_row_hash`), which the ETL implements as MD5. Gold deliberately standardizes on SHA-256 for SCD2 change detection; the two hash families are independent and not compared across layers.
 - **Natural keys are sourced from Silver business columns** (e.g. `customer_id` ← `silver_customer_account_no`, `store_id` ← `silver_store_code`), not from Silver's numeric `silver_*_id` surrogate-ish business keys, to keep Gold natural keys human-meaningful.
-- **Dimension key lookups in facts** use the *current* (`is_current = TRUE`) dimension version; an as-of (effective-dated) join may be substituted where point-in-time accuracy is required.
+- **Dimension key lookups in facts are effective-dated** (audit HIGH-3): a fact resolves the SCD2 version whose `[valid_from, valid_to)` window contains the event date (invoice/payment/snapshot date), **not** the current (`is_current`) version — so the fact carries the attributes that were true when it happened.
 - **Not Provided members:** unresolved fact→dimension lookups resolve to the `-1` Not Provided dimension member; unresolved text attributes default to `'Not Provided'`.

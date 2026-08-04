@@ -58,8 +58,8 @@ Tables: 8 dimensions + 3 facts (+ 3 role-playing date views over `dim_date`).
 | etl_batch_id | VARCHAR(50) | NULL | — | Load batch id. | governance |
 | etl_load_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | First-load timestamp. | governance |
 | etl_updated_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | Last-update timestamp. | governance |
-| valid_from | DATE | NULL | — | SCD2 validity start. | SCD2 |
-| valid_to | DATE | NULL | — | SCD2 validity end. | SCD2 |
+| valid_from | DATE | NULL | — | SCD2 validity start — source effective date (not load date); `1900-01-01` on the initial version. | SCD2 |
+| valid_to | DATE | NULL | — | SCD2 validity end — exclusive, = next version's `valid_from`; NULL = open. | SCD2 |
 | is_current | BOOLEAN | NOT NULL | TRUE | Current-version flag. | SCD2 |
 | row_version | INTEGER | NOT NULL | 1 | Version number per business key. | SCD2 |
 | is_complete | BOOLEAN | NOT NULL | TRUE | All required attributes present. | DQ |
@@ -94,8 +94,8 @@ Tables: 8 dimensions + 3 facts (+ 3 role-playing date views over `dim_date`).
 | etl_batch_id | VARCHAR(50) | NULL | — | Load batch id. | governance |
 | etl_load_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | First-load timestamp. | governance |
 | etl_updated_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | Last-update timestamp. | governance |
-| valid_from | DATE | NULL | — | SCD2 validity start. | SCD2 |
-| valid_to | DATE | NULL | — | SCD2 validity end. | SCD2 |
+| valid_from | DATE | NULL | — | SCD2 validity start — source effective date (not load date); `1900-01-01` on the initial version. | SCD2 |
+| valid_to | DATE | NULL | — | SCD2 validity end — exclusive, = next version's `valid_from`; NULL = open. | SCD2 |
 | is_current | BOOLEAN | NOT NULL | TRUE | Current-version flag. | SCD2 |
 | row_version | INTEGER | NOT NULL | 1 | Version number. | SCD2 |
 | is_complete | BOOLEAN | NOT NULL | TRUE | Completeness flag. | DQ |
@@ -129,8 +129,8 @@ Tables: 8 dimensions + 3 facts (+ 3 role-playing date views over `dim_date`).
 | etl_batch_id | VARCHAR(50) | NULL | — | Load batch id. | governance |
 | etl_load_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | First-load timestamp. | governance |
 | etl_updated_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | Last-update timestamp. | governance |
-| valid_from | DATE | NULL | — | SCD2 validity start. | SCD2 |
-| valid_to | DATE | NULL | — | SCD2 validity end. | SCD2 |
+| valid_from | DATE | NULL | — | SCD2 validity start — source effective date (not load date); `1900-01-01` on the initial version. | SCD2 |
+| valid_to | DATE | NULL | — | SCD2 validity end — exclusive, = next version's `valid_from`; NULL = open. | SCD2 |
 | is_current | BOOLEAN | NOT NULL | TRUE | Current-version flag. | SCD2 |
 | row_version | INTEGER | NOT NULL | 1 | Version number. | SCD2 |
 | is_complete | BOOLEAN | NOT NULL | TRUE | Completeness flag. | DQ |
@@ -163,8 +163,8 @@ Tables: 8 dimensions + 3 facts (+ 3 role-playing date views over `dim_date`).
 | etl_batch_id | VARCHAR(50) | NULL | — | Load batch id. | governance |
 | etl_load_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | First-load timestamp. | governance |
 | etl_updated_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | Last-update timestamp. | governance |
-| valid_from | DATE | NULL | — | SCD2 validity start. | SCD2 |
-| valid_to | DATE | NULL | — | SCD2 validity end. | SCD2 |
+| valid_from | DATE | NULL | — | SCD2 validity start — source effective date (not load date); `1900-01-01` on the initial version. | SCD2 |
+| valid_to | DATE | NULL | — | SCD2 validity end — exclusive, = next version's `valid_from`; NULL = open. | SCD2 |
 | is_current | BOOLEAN | NOT NULL | TRUE | Current-version flag. | SCD2 |
 | row_version | INTEGER | NOT NULL | 1 | Version number. | SCD2 |
 | is_complete | BOOLEAN | NOT NULL | TRUE | Completeness flag. | DQ |
@@ -198,8 +198,8 @@ Tables: 8 dimensions + 3 facts (+ 3 role-playing date views over `dim_date`).
 | etl_batch_id | VARCHAR(50) | NULL | — | Load batch id. | governance |
 | etl_load_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | First-load timestamp. | governance |
 | etl_updated_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | Last-update timestamp. | governance |
-| valid_from | DATE | NULL | — | SCD2 validity start. | SCD2 |
-| valid_to | DATE | NULL | — | SCD2 validity end. | SCD2 |
+| valid_from | DATE | NULL | — | SCD2 validity start — source effective date (not load date); `1900-01-01` on the initial version. | SCD2 |
+| valid_to | DATE | NULL | — | SCD2 validity end — exclusive, = next version's `valid_from`; NULL = open. | SCD2 |
 | is_current | BOOLEAN | NOT NULL | TRUE | Current-version flag. | SCD2 |
 | row_version | INTEGER | NOT NULL | 1 | Version number. | SCD2 |
 | is_complete | BOOLEAN | NOT NULL | TRUE | Completeness flag. | DQ |
@@ -229,8 +229,8 @@ Tables: 8 dimensions + 3 facts (+ 3 role-playing date views over `dim_date`).
 | etl_batch_id | VARCHAR(50) | NULL | — | Load batch id. | governance |
 | etl_load_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | First-load timestamp. | governance |
 | etl_updated_timestamp | TIMESTAMP | NOT NULL | CURRENT_TIMESTAMP | Last-update timestamp. | governance |
-| valid_from | DATE | NULL | — | SCD2 validity start. | SCD2 |
-| valid_to | DATE | NULL | — | SCD2 validity end. | SCD2 |
+| valid_from | DATE | NULL | — | SCD2 validity start — source effective date (not load date); `1900-01-01` on the initial version. | SCD2 |
+| valid_to | DATE | NULL | — | SCD2 validity end — exclusive, = next version's `valid_from`; NULL = open. | SCD2 |
 | is_current | BOOLEAN | NOT NULL | TRUE | Current-version flag. | SCD2 |
 | row_version | INTEGER | NOT NULL | 1 | Version number. | SCD2 |
 | is_complete | BOOLEAN | NOT NULL | TRUE | Completeness flag. | DQ |

@@ -41,14 +41,15 @@ Two signals from the Gold specs decide the strategy per table:
 
 **Natural key = the durable source id, not a display code.** Each Type 2 load matches the incoming Silver row to the dimension's **current** version (`is_current = TRUE`) on `source_record_id` — the durable source primary id (`silver_product_id`, `silver_customer_id`, …), **not** a mutable attribute like `sku_number` or `store_code`. Matching on a mutable code would orphan history the moment the code is corrected; matching on the durable id means a code change simply produces a new *version* (which is correct). Change within a version is detected with `record_hash` (SHA-256 of the tracked attributes).
 
-1. **New key** — insert version 1: `valid_from = load date`, `valid_to = NULL` (open), `is_current = TRUE`, `row_version = 1`.
+1. **New key** — insert version 1: `is_current = TRUE`, `row_version = 1`, `valid_to = NULL` (open). `valid_from` is the **source effective date**, never the load date — on the very first load it is a low-watermark (`DATE '1900-01-01'`), because the source carries no pre-load history, so v1 covers every fact that predates the first change.
 2. **Hash unchanged** — do nothing (no churn).
-3. **Hash changed** — insert the new version (`row_version + 1`, `is_current = TRUE`), then close the prior version (`valid_to = load date`, `is_current = FALSE`).
+3. **Hash changed** — insert the new version (`row_version + 1`, `is_current = TRUE`, `valid_from = silver_source_updated_at_timestamp` = when the change actually happened), then close the prior version (`is_current = FALSE`, `valid_to =` the new version's `valid_from`) → contiguous half-open windows `[valid_from, valid_to)`.
 
 ```sql
 -- change detection sketch (match on the durable source id)
 UPDATE gold.dim_product d
-SET    valid_to = CURRENT_DATE, is_current = FALSE, etl_updated_timestamp = CURRENT_TIMESTAMP
+SET    valid_to = s.src_updated_at::date,   -- effective date of the change, NOT the load date
+       is_current = FALSE, etl_updated_timestamp = CURRENT_TIMESTAMP
 FROM   staged s
 WHERE  d.source_record_id = s.source_record_id
   AND  d.is_current
@@ -56,7 +57,7 @@ WHERE  d.source_record_id = s.source_record_id
 -- then INSERT the new versions (row_version = old + 1)
 ```
 
-**dbt implementation (ADR-015).** Each Type 2 dim is a **custom incremental model** with `incremental_strategy='append'`: it inserts only new/changed versions (new `source_record_id`, or `record_hash` changed vs. the current version), then a **post-hook** closes any superseded version (`is_current=FALSE`, `valid_to=CURRENT_DATE`). Append (not merge) is essential — merge would overwrite the prior row in place, collapsing Type 2 into Type 1. Surrogate keys (dbt-managed plain `INTEGER`s — decision #7) are therefore stable across runs, which is what lets facts reference them. dbt's built-in `snapshot` was rejected: its fixed `dbt_valid_*` columns don't match this DDL (`valid_from/to`, `is_current`, `row_version`, the dbt-managed surrogate key, DQ columns), and it would still need an incremental reshaping model on top. See ADR-015.
+**dbt implementation (ADR-015).** Each Type 2 dim is a **custom incremental model** with `incremental_strategy='append'`: it inserts only new/changed versions (new `source_record_id`, or `record_hash` changed vs. the current version), then a **post-hook** closes any superseded version (`is_current=FALSE`, `valid_to =` the next version's `valid_from`, so windows are contiguous `[valid_from, valid_to)`). Versions are dated by the **source effective date** (`silver_source_updated_at_timestamp`), never the load date (audit HIGH-3). Append (not merge) is essential — merge would overwrite the prior row in place, collapsing Type 2 into Type 1. Surrogate keys (dbt-managed plain `INTEGER`s — decision #7) are therefore stable across runs, which is what lets facts reference them. dbt's built-in `snapshot` was rejected: its fixed `dbt_valid_*` columns don't match this DDL (`valid_from/to`, `is_current`, `row_version`, the dbt-managed surrogate key, DQ columns), and it would still need an incremental reshaping model on top. See ADR-015.
 
 **Fidelity caveat:** Silver keeps only the current version per key, so Gold can only version what it sees between runs. If an attribute changes twice between two Gold runs, the intermediate state is collapsed into one new version. This is acceptable for slow-moving dimensions, invoices included (a daily run captures the days-to-weeks status lifecycle). Where exact status-transition timing is required, `silver.invoice_status_history` / `customer_status_history` preserve the full event timeline (with `changed_at`) and are queried directly for status-duration analysis — they are not used to rebuild dimension versions, since Silver retains only current financial totals and cannot reconstruct point-in-time amounts for past transitions.
 
@@ -134,7 +135,7 @@ Dimensions load before facts because facts resolve dimension surrogate keys by l
 13. gold.fact_customer_behavior_snapshot (append new snapshot date)
 ```
 
-Fact-to-dimension lookups use the **current** dimension version (`is_current = TRUE`) at load time; an as-of (effective-dated) join on `valid_from`/`valid_to` may be substituted where point-in-time key assignment is required.
+Fact-to-dimension lookups are **effective-dated** (audit HIGH-3): each fact resolves the SCD2 dimension version whose `[valid_from, valid_to)` window contains the event date (invoice date / payment date / snapshot date), **not** the current (`is_current`) version — so a fact always carries the dimension attributes that were true when it occurred. Unmatched lookups fall back to the `-1` member (ADR-011).
 
 ## Batch control
 

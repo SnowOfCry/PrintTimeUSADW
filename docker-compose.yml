@@ -53,6 +53,7 @@ x-airflow-common: &airflow-common
     - ./airflow/config:/opt/airflow/config
     - ./ingestion:/opt/airflow/ingestion      # Python ingestion layer available to DAGs
     - ./dbt/printtime_dw:/dbt/printtime_dw    # dbt project, same path as the dbt service
+    - ./backups:/opt/airflow/backups          # scheduled-backup DAG writes archives here (host-persistent)
   depends_on:
     postgres:
       condition: service_healthy

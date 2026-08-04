@@ -95,8 +95,11 @@ final as (
     cross join snapshot_param sp
     left join invoice_agg    ia      on ia.silver_customer_id = c.silver_customer_id
     left join payment_speed  ps      on ps.silver_customer_id = c.silver_customer_id
+    -- SCD2 key by EFFECTIVE DATE (audit HIGH-3): the customer version in effect on
+    -- the snapshot date, so a past snapshot reflects who they were THEN, not now.
     left join {{ ref('dim_customer') }} dc
-           on dc.source_record_id = c.silver_customer_id::varchar and dc.is_current
+           on dc.source_record_id = c.silver_customer_id::varchar
+          and sp.snapshot_date >= dc.valid_from and (sp.snapshot_date < dc.valid_to or dc.valid_to is null)
     left join {{ ref('dim_date') }} dd_snap on dd_snap.date = sp.snapshot_date
     left join {{ ref('dim_date') }} dd_last on dd_last.date = ia.last_order_date
     {% if is_incremental() %}

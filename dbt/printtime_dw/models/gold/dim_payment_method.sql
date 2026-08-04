@@ -27,15 +27,13 @@
         "
         update {{ this }} d
         set    is_current           = false,
-               valid_to             = current_date,
+               valid_to             = nv.valid_from,
                etl_updated_timestamp = current_timestamp
-        where  d.is_current
+        from   {{ this }} nv
+        where  nv.source_record_id = d.source_record_id
+          and  nv.row_version      = d.row_version + 1
+          and  d.is_current
           and  d.payment_method_key <> -1
-          and  exists (
-                   select 1 from {{ this }} newer
-                   where  newer.source_record_id = d.source_record_id
-                     and  newer.row_version      > d.row_version
-               )
         "
     ]
 ) }}
@@ -50,6 +48,9 @@ with staged as (
         silver_is_active_flag::boolean                      as is_active,
         silver_is_deleted_flag::boolean                     as is_deleted,
         silver_source_system::varchar(50)                   as source_system,
+        -- Effective-dating input (audit HIGH-3): a new version is dated by the
+        -- source update instant, not the load date.
+        silver_source_updated_at_timestamp                  as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: a change here = a new version.
         encode(digest(concat_ws('|',
             coalesce(silver_method_code, ''),
@@ -111,7 +112,12 @@ final as (
         null::varchar(50)               as etl_batch_id,
         current_timestamp::timestamp    as etl_load_timestamp,
         current_timestamp::timestamp    as etl_updated_timestamp,
-        current_date::date              as valid_from,
+        -- Effective date (audit HIGH-3): initial version from a low-watermark;
+        -- later versions from the source update instant. Never the load date.
+        (case when row_version = 1
+              then date '1900-01-01'
+              else src_updated_at::date
+         end)                           as valid_from,
         null::date                      as valid_to,      -- open version
         true                            as is_current,
         row_version,
@@ -135,6 +141,6 @@ select
     'Not Provided'::varchar(30), false,
     null::char(64), 'system'::varchar(50), '-1'::varchar(100), null::varchar(50),
     current_timestamp::timestamp, current_timestamp::timestamp,
-    current_date::date, null::date, true, 1,
+    date '1900-01-01', null::date, true, 1,   -- -1 member: open-ended sentinel window
     true, false, false, null::varchar(500), false, null::timestamp
 {% endif %}

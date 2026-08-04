@@ -16,9 +16,11 @@
 --   * Changed invoices are found via silver_updated_at_timestamp > the last
 --     successful gold batch for this table in audit.etl_batch_control.
 --     delete+insert on invoice_number implements the reload atomically.
---   * Dimension keys are resolved against the CURRENT version (is_current) on the
---     durable source_record_id (decision #1); an unresolved lookup falls back to
---     the -1 Not Provided member so no sale is ever dropped (ADR-011).
+--   * Dimension keys are resolved by EFFECTIVE DATE (audit HIGH-3): the SCD2 version
+--     whose [valid_from, valid_to) window contains silver_invoice_date, on the
+--     durable source_record_id (decision #1) — so a sale carries the dimension
+--     attributes that were true WHEN IT HAPPENED, not the entity's current ones. An
+--     unresolved lookup falls back to the -1 Not Provided member (ADR-011).
 -- =============================================================================
 {{ config(
     materialized='incremental',
@@ -91,11 +93,17 @@ keyed as (
         s.silver_invoice_line_id::varchar(100)      as source_record_id
     from source_lines s
     left join {{ ref('dim_date') }}     dd    on dd.date              = s.silver_invoice_date
-    left join {{ ref('dim_cashier') }}  dcash on dcash.source_record_id = s.silver_employee_id::varchar and dcash.is_current
-    left join {{ ref('dim_product') }}  dp    on dp.source_record_id  = s.silver_product_id::varchar  and dp.is_current
-    left join {{ ref('dim_customer') }} dc    on dc.source_record_id  = s.silver_customer_id::varchar and dc.is_current
-    left join {{ ref('dim_store') }}    ds    on ds.source_record_id  = s.silver_store_id::varchar    and ds.is_current
-    left join {{ ref('dim_invoice') }}  di    on di.source_record_id  = s.silver_invoice_id::varchar  and di.is_current
+    -- SCD2 keys resolved by EFFECTIVE DATE: the version in effect on the invoice date.
+    left join {{ ref('dim_cashier') }}  dcash on dcash.source_record_id = s.silver_employee_id::varchar
+                and s.silver_invoice_date >= dcash.valid_from and (s.silver_invoice_date < dcash.valid_to or dcash.valid_to is null)
+    left join {{ ref('dim_product') }}  dp    on dp.source_record_id  = s.silver_product_id::varchar
+                and s.silver_invoice_date >= dp.valid_from    and (s.silver_invoice_date < dp.valid_to    or dp.valid_to    is null)
+    left join {{ ref('dim_customer') }} dc    on dc.source_record_id  = s.silver_customer_id::varchar
+                and s.silver_invoice_date >= dc.valid_from    and (s.silver_invoice_date < dc.valid_to    or dc.valid_to    is null)
+    left join {{ ref('dim_store') }}    ds    on ds.source_record_id  = s.silver_store_id::varchar
+                and s.silver_invoice_date >= ds.valid_from    and (s.silver_invoice_date < ds.valid_to    or ds.valid_to    is null)
+    left join {{ ref('dim_invoice') }}  di    on di.source_record_id  = s.silver_invoice_id::varchar
+                and s.silver_invoice_date >= di.valid_from    and (s.silver_invoice_date < di.valid_to    or di.valid_to    is null)
 ),
 
 -- 3) dbt-managed surrogate key (decision #7). Facts carry no durable key that

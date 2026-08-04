@@ -29,16 +29,14 @@
         "
         update {{ this }} d
         set    is_current            = false,
-               valid_to              = current_date,
+               valid_to              = nv.valid_from,
                etl_updated_timestamp = current_timestamp
-        where  d.is_current
+        from   {{ this }} nv
+        where  nv.source_record_id = d.source_record_id
+          and  nv.row_version      = d.row_version + 1
+          and  d.is_current
           and  d.customer_key <> -1
-          and  exists (
-                   select 1 from {{ this }} newer
-                   where  newer.source_record_id = d.source_record_id
-                     and  newer.row_version      > d.row_version
-               )
-        "
+"
     ]
 ) }}
 
@@ -64,6 +62,10 @@ with staged as (
         coalesce(dd.date_key, -1)::integer                      as first_order_date_key,
         c.silver_is_deleted_flag::boolean                       as is_deleted,
         c.silver_source_system::varchar(50)                     as source_system,
+        -- Effective-dating input (ADR-015 / audit HIGH-3 fix): a NEW version is dated
+        -- by the SOURCE update instant, not the load date, so the history reflects
+        -- when the change actually happened rather than when the ETL happened to run.
+        c.silver_source_updated_at_timestamp                    as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: a change here = a new version.
         encode(digest(concat_ws('|',
             coalesce(c.silver_customer_account_no, ''),
@@ -139,8 +141,16 @@ final as (
         null::varchar(50)               as etl_batch_id,
         current_timestamp::timestamp    as etl_load_timestamp,
         current_timestamp::timestamp    as etl_updated_timestamp,
-        current_date::date              as valid_from,
-        null::date                      as valid_to,      -- open version
+        -- Effective date (audit HIGH-3), never the load date. The source carries only
+        -- current state (no pre-load history), so the INITIAL version is effective
+        -- from a low-watermark — it covers every fact that predates the first real
+        -- change. A NEW version (a change detected after go-live) is effective from
+        -- the source UPDATE instant. Windows are half-open [valid_from, valid_to).
+        (case when row_version = 1
+              then date '1900-01-01'
+              else src_updated_at::date
+         end)                           as valid_from,
+        null::date                      as valid_to,      -- open version (closed by post-hook)
         true                            as is_current,
         row_version,
         true                            as is_complete,
@@ -165,6 +175,6 @@ select
     'Not Provided'::varchar(150), -1::integer,
     null::char(64), 'system'::varchar(50), '-1'::varchar(100), null::varchar(50),
     current_timestamp::timestamp, current_timestamp::timestamp,
-    current_date::date, null::date, true, 1,
+    date '1900-01-01', null::date, true, 1,   -- -1 member: open-ended sentinel window
     true, false, false, null::varchar(500), false, null::timestamp
 {% endif %}

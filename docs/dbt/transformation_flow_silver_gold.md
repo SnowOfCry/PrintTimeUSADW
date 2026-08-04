@@ -107,7 +107,7 @@ flowchart TD
   cmp -->|new source id| v1["insert version 1<br/>is_current=true · valid_to=NULL · row_version=1"]
   cmp -->|record_hash unchanged| noop["do nothing (no churn)"]
   cmp -->|record_hash changed| vN["APPEND new version<br/>row_version+1 · is_current=true"]
-  vN --> close["post-hook 1: close prior version<br/>is_current=false · valid_to=today"]
+  vN --> close["post-hook 1: close prior version<br/>is_current=false · valid_to=next version's valid_from"]
   seed["post-hook 2: seed -1 member"]:::side
   classDef side fill:#eef,stroke:#88a
 ```
@@ -124,7 +124,7 @@ Facts carry no SCD2. They **look up** dimension surrogate keys (current version)
 their parent grain, incrementally.
 ```mermaid
 flowchart TD
-  s["silver fact rows<br/>(changed since last gold batch:<br/>silver_updated_at_timestamp)"] --> lk["resolve surrogate keys<br/>join dims on is_current; unmatched -> -1"]
+  s["silver fact rows<br/>(changed since last gold batch:<br/>silver_updated_at_timestamp)"] --> lk["resolve surrogate keys<br/>effective-dated: event date in [valid_from,valid_to); unmatched -> -1"]
   lk --> load["load at parent grain"]
   load --> f1["fact_retail_sales<br/>reload-by-invoice"]
   load --> f2["fact_payments<br/>insert + 2nd pass for parent_payment_key"]

@@ -30,7 +30,7 @@ The choice per table was driven by two signals already fixed in the gold specs: 
 | `fact_payments` | payment | **Insert + second pass** resolving the self-referencing `parent_payment_key` (refund → original) via `(invoice_key, payment_sequence_num)` |
 | `fact_customer_behavior_snapshot` | customer × snapshot date | **Periodic snapshot, append-only**: prior snapshot dates are immutable history |
 
-**Load order:** `dim_date` → seed `-1` Not Provided members (ADR-011) → Type 1/2 dimensions → facts → snapshot. Dimensions load first because facts resolve surrogate keys against current (`is_current = TRUE`) dimension versions. Every gold load logs a batch to `audit.etl_batch_control` (ADR-008) with no watermark — silver is already current.
+**Load order:** `dim_date` → seed `-1` Not Provided members (ADR-011) → Type 1/2 dimensions → facts → snapshot. Dimensions load first because facts resolve surrogate keys against the dimension version **in effect on the event date** (effective-dated `[valid_from, valid_to)`; audit HIGH-3, see ADR-015 Correction). Every gold load logs a batch to `audit.etl_batch_control` (ADR-008) with no watermark — silver is already current.
 
 ## Alternatives considered
 

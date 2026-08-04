@@ -308,15 +308,18 @@ contract can neither express `GENERATED AS IDENTITY` nor let the model omit the 
 - `staged` computes a SHA-256 `record_hash` over tracked attributes (needs `pgcrypto`, now in
   the DB init); `changed` emits only new entities or changed hashes vs. `{{ this }}` current;
 - each emitted row is a **new version** (`row_version + 1`, fresh key = max + offset,
-  `is_current = true`); a **post-hook** closes the superseded version
-  (`is_current = false`, `valid_to = current_date`);
+  `is_current = true`, `valid_from =` the **source effective date** — low-watermark `1900-01-01`
+  on the initial version); a **post-hook** closes the superseded version
+  (`is_current = false`, `valid_to =` the next version's `valid_from` → half-open windows;
+  audit HIGH-3);
 - the `-1` member is a literal `UNION ALL` row emitted **only on the first build**
   (`{% if not is_incremental() %}`), so the append never duplicates it.
 Every dim passed the same live proof: no change → `INSERT 0 0`; a real change → exactly one new
 version with the old key preserved; 0 entities with more than one current version.
 
-**3. Facts are lookups + grain, not versions.** Dimension keys resolve against the *current*
-version on the durable id, `coalesce(..., -1)`; measures are cast to the DDL; the surrogate key
+**3. Facts are lookups + grain, not versions.** Dimension keys resolve **effective-dated** — the
+SCD2 version whose `[valid_from, valid_to)` window contains the event date (not `is_current`),
+on the durable id, `coalesce(..., -1)` (audit HIGH-3); measures are cast to the DDL; the surrogate key
 continues from `max({{ this }})`. Per-fact strategies: `fact_retail_sales` uses
 `delete+insert` keyed on `invoice_number` (reload-by-invoice, ADR-009 — no line id needed);
 `fact_payments` resolves `parent_payment_key` **in-model** via a self-join on this load's own

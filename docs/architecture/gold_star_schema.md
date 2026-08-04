@@ -214,14 +214,17 @@ carries:
 
 | Column | Meaning |
 |---|---|
-| `valid_from` / `valid_to` | the window this version was in effect (`valid_to` NULL = open) |
+| `valid_from` / `valid_to` | the window this version was in effect — half-open `[valid_from, valid_to)`, dated by the **source effective date** (not the load date), `valid_to` NULL = open |
 | `is_current` | `true` on exactly one version per entity |
 | `row_version` | 1, 2, 3 … per entity |
 | `record_hash` | SHA-256 of tracked attributes; a change appends a new version |
 
-**Always filter `WHERE is_current` for "as of today" reporting.** Omit it only when you
-deliberately want point-in-time history (e.g. the price a product had when a sale happened —
-which is exactly why facts store the surrogate key of the version in effect at the time).
+**Filter `WHERE is_current` when you query a dimension directly for "as of today" reporting.**
+The **facts already do the point-in-time work for you**: each fact stores the surrogate key of
+the dimension version *in effect on the event date* (resolved by `event_date ∈ [valid_from,
+valid_to)`, audit HIGH-3), so a sale carries the price/name/segment the entity had **when the
+sale happened**, not today's. You only join on `valid_from`/`valid_to` yourself when querying a
+dimension outside a fact.
 
 ---
 

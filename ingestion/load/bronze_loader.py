@@ -21,6 +21,7 @@ NOT responsible for:
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime
 from typing import Any
 
@@ -31,6 +32,10 @@ from sqlalchemy.dialects.postgresql import JSONB
 from ingestion.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Bronze target-table names are SQL identifiers interpolated into catalog/snapshot
+# queries (identifiers cannot be bound parameters), so accept only plain identifiers.
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +130,8 @@ class BronzeLoader:
         dw_engine: Any = None,
     ) -> None:
         self.pipeline_name = pipeline_name
+        if not _SAFE_IDENTIFIER.match(target_table):
+            raise ValueError(f"Unsafe bronze target table name: {target_table!r}")
         self.target_table = target_table
         self.source_table_name = source_table_name or target_table
         self.source_system = source_system or (
@@ -165,6 +172,14 @@ class BronzeLoader:
         engine = self._get_engine()
         target_cols = self._get_target_columns(engine)
 
+        # MED-7: on a full-load re-append, skip rows unchanged since the last
+        # snapshot — same business hash (which already includes the natural key),
+        # so nothing to record. Incremental loads are watermark-filtered upstream,
+        # so there is no snapshot stacking to skip there.
+        skip_hashes = (
+            self._latest_snapshot_hashes(engine) if strategy == "full_load" else set()
+        )
+
         total = len(df)
         logger.info(
             "Appending %d rows → bronze.%s | strategy=%s batch_id=%s",
@@ -176,25 +191,43 @@ class BronzeLoader:
 
         # Transform + append in row-chunks so peak memory stays bounded on large
         # tables (e.g. invoice_line ~390k rows); transforming the whole frame at
-        # once can exhaust container memory.
+        # once can exhaust container memory. MED-3: the whole table load runs in
+        # ONE transaction (engine.begin), so a mid-load failure rolls back cleanly
+        # — no orphan rows for a retry to duplicate, and bronze stays append-only.
         loaded = 0
-        for start in range(0, total, self.LOAD_CHUNK_ROWS):
-            chunk = df.iloc[start : start + self.LOAD_CHUNK_ROWS]
-            bronze_chunk = self._standardize(
-                chunk, target_cols, log_diagnostics=(start == 0)
-            )
-            bronze_chunk.to_sql(
-                name=self.target_table,
-                con=engine,
-                schema="bronze",
-                if_exists="append",  # bronze is append-only — never replace
-                index=False,
-                method="multi",
-                chunksize=500,
-                dtype={"bronze_raw_payload_jsonb": JSONB},
-            )
-            loaded += len(bronze_chunk)
+        skipped = 0
+        with engine.begin() as conn:
+            for start in range(0, total, self.LOAD_CHUNK_ROWS):
+                chunk = df.iloc[start : start + self.LOAD_CHUNK_ROWS]
+                bronze_chunk = self._standardize(
+                    chunk, target_cols, log_diagnostics=(start == 0)
+                )
+                if skip_hashes:
+                    before = len(bronze_chunk)
+                    bronze_chunk = bronze_chunk[
+                        ~bronze_chunk["bronze_row_hash"].isin(skip_hashes)
+                    ]
+                    skipped += before - len(bronze_chunk)
+                if bronze_chunk.empty:
+                    continue
+                bronze_chunk.to_sql(
+                    name=self.target_table,
+                    con=conn,
+                    schema="bronze",
+                    if_exists="append",  # bronze is append-only — never replace
+                    index=False,
+                    method="multi",
+                    chunksize=500,
+                    dtype={"bronze_raw_payload_jsonb": JSONB},
+                )
+                loaded += len(bronze_chunk)
 
+        if skipped:
+            logger.info(
+                "bronze.%s: hash-skipped %d unchanged row(s) since the last snapshot",
+                self.target_table,
+                skipped,
+            )
         logger.info(
             "Appended %d rows → bronze.%s (batch_id=%s)",
             loaded,
@@ -293,6 +326,25 @@ class BronzeLoader:
             )
 
         return work[keep]
+
+    def _latest_snapshot_hashes(self, engine: Any) -> set[str]:
+        """Return the bronze_row_hash set of this table's most recent batch (MED-7).
+
+        Used for full-load hash-skip: a row whose business hash (which includes
+        its natural key) matches the last snapshot is unchanged and is not
+        re-appended. Empty on the first load. The current load's rows are not in
+        the table yet, so MAX(bronze_batch_id) is the *previous* snapshot.
+        `target_table` is validated as a plain identifier in __init__, so the
+        interpolation below is safe.
+        """
+        sql = text(
+            f"SELECT bronze_row_hash FROM bronze.{self.target_table} "
+            f"WHERE bronze_batch_id = "
+            f"(SELECT MAX(bronze_batch_id) FROM bronze.{self.target_table})"
+        )
+        with engine.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return {r[0] for r in rows if r[0] is not None}
 
     def _get_target_columns(self, engine: Any) -> list[str]:
         """Return the column names of bronze.<target_table> from the catalog."""

@@ -372,6 +372,10 @@ Effort:        1 day
   — bronze appends + silver dedup make re-extraction free and safe, which is a
   strength of this design), or watermark on an OLTP sequence/txid. Document the
   hard-delete gap explicitly in the bronze strategy doc. **Effort:** half day.
+- **✅ RESOLVED (2026-08-05):** the extractor now filters `> (watermark −
+  WATERMARK_LOOKBACK)` (default 1h) to re-scan late-committing rows; free here
+  (bronze appends + silver dedups + full-load hash-skip). The hard-delete gap is
+  now explicitly documented in the bronze strategy doc. See FIX-010.
 
 ### MED-3 — Partial batch failure leaves orphan rows; retry duplicates them
 
@@ -385,6 +389,10 @@ Effort:        1 day
 - **Recommendation:** Either wrap the whole table load in one transaction
   (`engine.begin()` passed to `to_sql`), or on retry delete rows of the prior failed
   `bronze_batch_id` first. **Effort:** 2h.
+- **✅ RESOLVED (2026-08-05):** the whole table load now runs in one transaction
+  (`engine.begin()`), so a mid-load failure rolls back all chunks — no orphans,
+  no retry duplication, bronze stays append-only. Proven by injecting a chunk-2
+  failure (chunk 1 rolled back too). See FIX-010.
 
 ### MED-4 — `audit.audit_log` is defined, documented, and never written
 
@@ -433,6 +441,11 @@ Effort:        1 day
 - **Recommendation:** Implement backlog #1's hash-skip (loader already computes
   `bronze_row_hash`; skip rows whose hash matches the latest bronze row per key).
   **Effort:** ~1h (backlog's own estimate).
+- **✅ RESOLVED (2026-08-05):** full-load loads now hash-skip rows whose
+  `bronze_row_hash` matches the latest snapshot (the hash covers the natural key,
+  so unchanged rows hash identically). Proven: re-loading an unchanged table
+  appended 0 rows. Incremental tables are intentionally not hash-skipped. See
+  FIX-010.
 
 ### MED-8 — Airflow webserver secret has a committed default; Fernet key optional
 

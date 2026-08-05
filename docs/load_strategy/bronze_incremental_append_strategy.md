@@ -31,7 +31,9 @@ Every load runs under a single ETL batch tracked in `audit.etl_batch_control`. T
 - Deduplicate no-op extracts (same business values re-extracted) when building Silver.
 - Drive change detection for SCD2 in Gold without comparing every column individually.
 
-The hash is stored, never used to filter inserts — Bronze still appends every extracted row; the hash is a downstream convenience and an audit checksum.
+For **incremental** tables the hash is stored, not used to filter inserts — every watermark-selected row is appended, and the hash is a downstream convenience and an audit checksum.
+
+For **full-load** tables (small reference/dimension tables re-extracted whole each run) the loader uses the hash to **skip unchanged rows**: a row whose `bronze_row_hash` matches the latest snapshot for that table is not re-appended (MED-7). Because the hash covers the business columns *including the natural key*, an unchanged row hashes identically and is skipped — so a full-load table stops stacking a complete duplicate snapshot every run. New and changed rows still append.
 
 ## How watermarks work
 
@@ -41,6 +43,8 @@ Each Bronze table declares a recommended watermark column (see the mapping doc).
 2. Extract source rows where the source watermark column is greater than that value.
 3. Append them to Bronze.
 4. Record the new max watermark in `watermark_value_end` for the batch.
+
+**Overlap window (MED-2).** The extract floor is not the exact watermark but `watermark − 1 hour`. A source row that was *in-flight* at the previous extract — its transaction committed **after** the extract but its `updated_at` was stamped **before** the captured max — would otherwise fall permanently below a strict `>` filter and be lost forever. Re-scanning a small trailing window each run catches these late commits. It is free here: bronze appends, silver dedups to the latest version, and full-load tables hash-skip the unchanged re-reads, so re-extracting a recent row costs nothing. The interval is configurable (`OLTPExtractor.WATERMARK_LOOKBACK`).
 
 Watermark column selection rules used in this project:
 
@@ -53,6 +57,14 @@ Watermark column selection rules used in this project:
 ## How changed source records are captured
 
 Because the load filters on the source watermark and inserts (never updates), any source row whose `updated_at` advances past the watermark is re-extracted and appended as a new Bronze version. The combination of (`source id`, `source_row_version`, `updated_at_source_timestamp`, `bronze_row_hash`, `bronze_batch_id`) on the appended rows fully describes the change history for that source record.
+
+## Known limitation: hard deletes are not captured
+
+Bronze captures INSERTs and UPDATEs (a changed row re-appears with a newer `updated_at`) and **soft** deletes (the source `is_deleted` flag flows through as `bronze_is_deleted_flag`). A **hard** delete — a row physically removed from the source — leaves no trace for a watermark-based incremental load: the row simply stops appearing, and nothing signals its removal. Full-load tables re-snapshot, so a hard-deleted reference row is absent from the next snapshot (though the deletion itself is still not explicitly recorded). Capturing hard deletes on incremental tables would require full-diff / log-based CDC or a periodic key reconciliation — deferred; the gap is named here so it is a **known, documented** limitation rather than a silent one (MED-2).
+
+## Atomic table loads
+
+Each table's load runs inside a **single transaction** (`engine.begin()`), even though rows are transformed and sent in memory-bounded chunks. If any chunk fails, the whole load rolls back — no partially-landed rows for a retry to duplicate, and `rows_extracted` vs `rows_inserted` reconciliation stays exact. This keeps bronze append-only and idempotent on retry (MED-3).
 
 ## Why source IDs are not primary keys in Bronze
 

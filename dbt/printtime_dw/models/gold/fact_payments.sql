@@ -32,7 +32,9 @@
     materialized='incremental',
     incremental_strategy='delete+insert',
     unique_key='source_record_id',
-    on_schema_change='fail'
+    on_schema_change='fail',
+    pre_hook="{{ audit_stage_before_image('source_record_id', 'source_record_id', changed_payment_ids()) }}",
+    post_hook="{{ audit_write_change_log('gold.fact_payments', 'payment_key') }}"
 ) }}
 
 -- 1) Read silver payments. On incremental runs, keep only payments touched since
@@ -41,12 +43,9 @@ with source_payments as (
     select *
     from {{ ref('payment') }} p
     {% if is_incremental() %}
-    where p.silver_updated_at_timestamp > (
-        select coalesce(max(batch_end_timestamp), '1900-01-01'::timestamp)
-        from audit.etl_batch_control
-        where target_table = 'gold.fact_payments'
-          and batch_status = 'succeeded'
-    )
+    -- changed payments since the last gold batch (same watermark the before-image
+    -- pre_hook uses via changed_payment_ids()).
+    where p.silver_updated_at_timestamp > {{ last_gold_watermark('gold.fact_payments') }}
     {% endif %}
 ),
 

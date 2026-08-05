@@ -30,7 +30,7 @@ never written into the SQL).
 | Role | Privileges | Used by |
 |---|---|---|
 | **`pt_ingestion`** | `USAGE`+`SELECT`+`INSERT` on **bronze**; `SELECT`+`INSERT`+`UPDATE` on **audit** (watermark/batch state); sequence `USAGE`. No silver/gold. | Python ingestion + the DAG's batch-control/watermark tasks (`DW_*`) |
-| **`pt_dbt`** | `SELECT` on **bronze**+**audit** (gold facts read `audit.etl_batch_control`); **owns silver + gold** (full DDL to create/drop/replace models). Cannot write bronze/audit. | dbt (`DBT_*`) |
+| **`pt_dbt`** | `SELECT` on **bronze**+**audit** (gold facts read `audit.etl_batch_control`); **owns silver + gold** (full DDL to create/drop/replace models). Cannot write bronze. Writes **`audit.audit_log` only** via `INSERT` — the fact-reload change trail (MED-4) — never `etl_batch_control`. | dbt (`DBT_*`) |
 | **`pt_bi_reader`** | `USAGE`+`SELECT` on **gold only**. No `USAGE` on bronze/silver/audit. | Power BI / analysts / managers |
 | `warehouse_user` | Superuser (unchanged) — admin, pgAdmin, Airflow-metadata connection, break-glass, and the **backup DAG** (which needs dump-all + createdb/dropdb). | Admin / DR |
 

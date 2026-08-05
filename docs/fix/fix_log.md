@@ -11,6 +11,37 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-007 — `audit.audit_log` never written: fact reloads destroyed rows with no trail
+
+| | |
+|---|---|
+| **Found** | 2026-07-28, external audit round 002 (finding MED-4) |
+| **Symptom** | The `delete+insert` facts overwrote rows on every reload with **no record** of the prior values; `audit.audit_log` (built for exactly this) was never written. |
+| **Affected** | `fact_retail_sales`, `fact_payments` + a new macro file; `sql/security/001_create_roles.sql` |
+| **Severity** | MEDIUM (governance / change tracking) |
+
+### Cause
+
+`audit.audit_log` — the designed insert-only change trail (ADR-008), which ADR-013 §4 also relies on for CCPA erasure logging — had **no writer**. The two facts reload by `delete+insert`, so the old fact rows were gone with no before-image. (SCD2 dimensions don't have this gap — they *keep* the old version in-table, so their history is self-documenting; MED-4 is facts-only.)
+
+### Fix
+
+A `pre_hook`/`post_hook` pair on each `delete+insert` fact, both inside the model's transaction (atomic with the reload):
+
+- **pre_hook** `audit_stage_before_image()` — stages the before-image of the rows about to be deleted (the *same* changed-set the model reloads, via a shared `changed_*` macro, so captured = replaced) into a **session temp table**.
+- **post_hook** `audit_write_change_log()` — writes **one insert-only** `audit_log` row per staged row, pairing it to its replacement by the durable `source_record_id` to fill `new_row` + `changed_columns` (business columns only — the regenerated surrogate key and load-metadata timestamps are excluded, or every reload would look fully changed). A staged row with no surviving fact row → `DELETE`.
+- `change_reason` is best-effort from `silver.invoice_adjustment.silver_adjustment_reason`, else `'source_update'`; `etl_batch_id` is the real batch id (FIX-006).
+
+**Spec decision:** the first cut used a `post_hook` `UPDATE` to fill the after-image, but the DDL/ADR-008 say `audit_log` is *"insert-only … never updated."* Reworked to the temp-staging pattern so `audit_log` only ever receives INSERTs, and `pt_dbt` was granted **INSERT on `audit_log` only** (not `etl_batch_control`) — least privilege intact.
+
+Verified end-to-end: editing one invoice line logged `old_row` 392.70 → `new_row` 999.99 with `changed_columns = ["gross_profit","sales_amount"]`, the real batch id, and the reason; the untouched line of the same reloaded invoice logged `changed_columns = NULL`. 165/165 tests pass.
+
+### Class of mistake
+
+**Designed but unwired capability** (same family as FIX-006). The table, its columns, and two ADRs describing it all existed; nothing wrote to it. And the fix surfaced a second lesson: an *insert-only* invariant is a real constraint — the obvious "insert then update to fill" approach violates it, so stage-then-insert-once is the faithful pattern.
+
+---
+
 ## FIX-006 — gold rows stamped `etl_batch_id` NULL: row-level lineage was broken
 
 | | |

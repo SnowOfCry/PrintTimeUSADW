@@ -66,6 +66,10 @@ GRANT USAGE, SELECT, UPDATE        ON ALL SEQUENCES IN SCHEMA audit  TO pt_inges
 GRANT USAGE  ON SCHEMA bronze, audit TO pt_dbt;
 GRANT SELECT ON ALL TABLES IN SCHEMA bronze TO pt_dbt;
 GRANT SELECT ON ALL TABLES IN SCHEMA audit  TO pt_dbt;   -- gold facts read audit.etl_batch_control
+-- pt_dbt writes the row-level change trail on fact reloads (MED-4). INSERT only
+-- (audit_log is insert-only — ADR-008) and ONLY on audit_log — NOT on
+-- etl_batch_control, which stays the ingestion/DAG's to write.
+GRANT INSERT ON audit.audit_log TO pt_dbt;
 
 -- Ownership of silver + gold (schemas and every object in them) so dbt can
 -- create / drop / replace models. Transfers existing objects from the prior

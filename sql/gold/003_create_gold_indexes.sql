@@ -4,6 +4,14 @@
 -- Dimensions: natural key + is_current (current-version lookup) and
 -- valid_from/valid_to (as-of lookup). Facts: one index per FK key.
 -- dim_date: calendar lookup indexes.
+--
+-- ⚠️ BOOTSTRAP / SPEC REFERENCE ONLY (MED-9, 2026-08-05).
+-- The gold tables are dbt-managed (ADR-015 #7), so a `dbt --full-refresh`
+-- DROPs and reCREATEs them — which would drop any index created from this
+-- file. Index management is therefore owned by the dbt models via the
+-- `indexes=[...]` config, which recreates them on every (re)build. This file
+-- documents the intended index set; **the dbt config is authoritative** at
+-- runtime. Keep the two in sync when adding an index.
 -- =====================================================================
 
 SET search_path = gold, public;

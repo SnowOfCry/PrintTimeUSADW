@@ -23,6 +23,10 @@
     materialized='incremental',
     incremental_strategy='append',
     on_schema_change='fail',
+    indexes=[
+        {'columns': ['method_code', 'is_current']},
+        {'columns': ['valid_from', 'valid_to']},
+    ],
     post_hook=[
         "
         update {{ this }} d

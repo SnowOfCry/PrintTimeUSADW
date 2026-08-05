@@ -13,7 +13,13 @@
 --   - a -1 "Not Provided" member (ADR-011) for unknown/optional date FKs;
 --     date is NOT NULL so the member uses the sentinel 1900-01-01.
 -- =============================================================================
-{{ config(materialized='table') }}
+{{ config(
+    materialized='table',
+    indexes=[
+        {'columns': ['date']},
+        {'columns': ['calendar_year_month']},
+    ]
+) }}
 
 with spine as (
     select generate_series(date '2020-01-01', date '2030-12-31', interval '1 day')::date as date

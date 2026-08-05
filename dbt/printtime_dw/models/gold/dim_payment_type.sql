@@ -14,7 +14,10 @@
     unique_key='payment_type_key',
     incremental_strategy='merge',
     merge_exclude_columns=['etl_load_timestamp'],
-    on_schema_change='fail'
+    on_schema_change='fail',
+    indexes=[
+        {'columns': ['type_code']},
+    ]
 ) }}
 
 with staged as (           -- read silver, map/clean the business columns

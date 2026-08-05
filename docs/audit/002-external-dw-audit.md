@@ -382,6 +382,13 @@ All verified still present at `15c1c52`.
 > `audit_log` only** (not `etl_batch_control`). Verified end-to-end: a changed invoice logs
 > old→new plus the exact changed columns. See `docs/fix/fix_log.md` FIX-007.
 
+> **✅ MED-9 RESOLVED (2026-08-05):** gold indexes are now **dbt-managed** via the declarative
+> `indexes=[…]` config on all 11 gold models (replicating `sql/gold/003` exactly), so a
+> `dbt --full-refresh` — which `DROP`s/`CREATE`s the dbt-owned tables and used to drop the
+> DDL-created indexes — now recreates them on every rebuild. Confirmed the star had **0 of 33**
+> `idx_*` live; after the fix a full-refresh creates all 33 (11 → 44 total indexes).
+> `sql/gold/003` annotated bootstrap/spec-reference only. See `docs/fix/fix_log.md` FIX-008.
+
 ---
 
 ## 6. Data Model Assessment

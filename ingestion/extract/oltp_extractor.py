@@ -17,7 +17,7 @@ NOT responsible for:
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -49,6 +49,12 @@ class OLTPExtractor:
         A live database connection. If None, the extractor will open one
         using environment-variable credentials when extract_table() is called.
     """
+
+    # Overlap the incremental window by this much so rows that were in-flight
+    # (committed late but timestamped early) at the previous extract are re-read
+    # on the next run — the watermark race (MED-2). Free here: bronze appends and
+    # silver dedups to latest, so re-reading a recent row costs nothing.
+    WATERMARK_LOOKBACK = timedelta(hours=1)
 
     def __init__(
         self,
@@ -152,6 +158,8 @@ class OLTPExtractor:
         interpolated — so the driver sends it with its real type (no fragile
         str() round-trip) and there is no value-injection surface. Table/column
         are SQL identifiers (cannot be bound) and are validated first (MED-1).
+        The value is shifted back by WATERMARK_LOOKBACK to catch in-flight
+        commits missed by a strict `>` on the previous run (MED-2).
         """
         self._validate_identifier(table_name, "table")
         if last_value is None:
@@ -160,8 +168,20 @@ class OLTPExtractor:
         self._validate_identifier(watermark_column, "watermark column")
         return (
             text(f"SELECT * FROM {table_name} WHERE {watermark_column} > :watermark"),
-            {"watermark": last_value},
+            {"watermark": self._apply_lookback(last_value)},
         )
+
+    def _apply_lookback(self, last_value: str | datetime) -> Any:
+        """Shift the watermark back by WATERMARK_LOOKBACK (MED-2).
+
+        Timestamp watermarks are parsed and shifted so late-committing rows get
+        re-scanned next run; an unparseable (non-timestamp) watermark is returned
+        unchanged so the strict comparison still holds.
+        """
+        ts = pd.to_datetime(last_value, errors="coerce")
+        if pd.isna(ts):
+            return last_value
+        return (ts - self.WATERMARK_LOOKBACK).to_pydatetime()
 
     def _get_connection(self) -> Any:
         """Return an existing connection/engine or open one from env vars."""

@@ -11,6 +11,36 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-010 — bronze ingestion hardening: watermark race, retry duplicates, snapshot stacking
+
+| | |
+|---|---|
+| **Found** | audit round 001 (MED-2, MED-3, MED-7) |
+| **Affected** | `ingestion/extract/oltp_extractor.py`, `ingestion/load/bronze_loader.py` |
+| **Severity** | MEDIUM x3 (correctness / robustness / storage) |
+
+Three related bronze-ingestion gaps, fixed together because they reinforce each other.
+
+### MED-2 — watermark race could permanently miss rows
+
+A row committed *after* an extract but timestamped *before* the captured max `updated_at` (an in-flight transaction) falls below a strict `> watermark` filter and is never picked up again. **Fix:** the extractor now filters `> (watermark − WATERMARK_LOOKBACK)` (default 1h) — a small overlap window that re-scans late-committing rows. It's free here because bronze appends, silver dedups to latest, and full-load tables hash-skip the unchanged re-reads. The **hard-delete gap** (watermark loads can't see physically-removed rows) is now explicitly documented in the bronze strategy doc rather than left silent.
+
+### MED-3 — partial batch failure left orphans; retry duplicated them
+
+Chunked `to_sql` committed every 20k-row chunk independently, so a mid-load crash left some rows landed under a `failed` batch, and the retry re-appended the whole window. **Fix:** the whole table load runs in **one transaction** (`engine.begin()`); any chunk failure rolls back all of them. No orphans, `rows_extracted`/`rows_inserted` stays exact, and bronze stays append-only (no delete-on-retry needed). Proven by injecting a failure on chunk 2 — chunk 1 rolled back too (row count unchanged).
+
+### MED-7 — full-load tables stacked a full duplicate snapshot every run
+
+11 reference/dimension tables re-appended their entire contents daily even when unchanged. **Fix:** full-load loads now **hash-skip** — a row whose `bronze_row_hash` matches the latest snapshot is not re-appended (the hash already covers the natural key, so unchanged rows hash identically). Proven: re-loading an unchanged table appended **0** rows. Incremental tables are deliberately *not* hash-skipped (matching against historical hashes could wrongly skip a legitimate revert; silver already absorbs the tiny lookback re-read).
+
+**Also:** `bronze_loader` now validates its target-table identifier (same pattern as FIX-009) since MED-7 interpolates the table name into a snapshot query. Unit tests updated + extended.
+
+### Class of mistake
+
+**Boundary and idempotency assumptions.** MED-2 trusted timestamp order to equal commit order; MED-3 trusted a multi-statement load to be all-or-nothing without a transaction; MED-7 trusted "append everything" to be cheap forever. Each is fine until scale or concurrency makes the hidden assumption bite.
+
+---
+
 ## FIX-009 — extractor built SQL by f-string interpolation (value + identifiers)
 
 | | |

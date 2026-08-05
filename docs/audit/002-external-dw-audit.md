@@ -371,6 +371,17 @@ despite ADR-013 §4 depending on it), MED-5 (no SCD2 invariant tests — still n
 fallbacks), MED-9 (`--full-refresh` drops DDL-managed indexes), LOW-1 through LOW-7.
 All verified still present at `15c1c52`.
 
+> **✅ MED-4 RESOLVED (2026-08-05):** `audit.audit_log` is now written on every fact
+> reload. The two `delete+insert` facts stage each replaced row's before-image in a
+> `pre_hook` and write one **insert-only** `audit_log` row per row in a `post_hook` — with
+> `old_row`, `new_row`, `changed_columns` (business columns only), `change_reason`
+> (best-effort from `silver.invoice_adjustment`, else `source_update`), the real
+> `etl_batch_id` (paired with MED-10), and `source_system`. SCD2 dimensions keep their own
+> history in-table, so they don't need it (facts-only gap). `audit_log` stays strictly
+> insert-only (ADR-008) via a temp-staging pattern, and `pt_dbt` was granted **INSERT on
+> `audit_log` only** (not `etl_batch_control`). Verified end-to-end: a changed invoice logs
+> old→new plus the exact changed columns. See `docs/fix/fix_log.md` FIX-007.
+
 ---
 
 ## 6. Data Model Assessment

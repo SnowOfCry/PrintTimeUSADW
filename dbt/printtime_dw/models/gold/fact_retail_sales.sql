@@ -26,7 +26,9 @@
     materialized='incremental',
     incremental_strategy='delete+insert',
     unique_key='invoice_number',
-    on_schema_change='fail'
+    on_schema_change='fail',
+    pre_hook="{{ audit_stage_before_image('invoice_number', 'invoice_number', changed_invoice_numbers(), reason_from_invoice_adjustment()) }}",
+    post_hook="{{ audit_write_change_log('gold.fact_retail_sales', 'sales_line_key') }}"
 ) }}
 
 -- 1) Invoice lines joined to their header. On incremental runs, keep only the
@@ -50,23 +52,11 @@ with source_lines as (
     join {{ ref('invoice') }} i
       on i.silver_invoice_id = l.silver_invoice_id
     {% if is_incremental() %}
+    -- reload the whole invoice when the header OR any of its lines changed. This
+    -- is the SAME changed-set the before-image pre_hook captures (one macro), so
+    -- the rows logged to audit.audit_log are exactly the rows replaced here.
     where i.silver_invoice_number in (
-        -- reload the whole invoice when the header OR any of its lines changed
-        select i2.silver_invoice_number
-        from {{ ref('invoice') }} i2
-        left join {{ ref('invoice_line') }} l2 on l2.silver_invoice_id = i2.silver_invoice_id
-        where i2.silver_updated_at_timestamp > (
-                  select coalesce(max(batch_end_timestamp), '1900-01-01'::timestamp)
-                  from audit.etl_batch_control
-                  where target_table = 'gold.fact_retail_sales'
-                    and batch_status = 'succeeded'
-              )
-           or l2.silver_updated_at_timestamp > (
-                  select coalesce(max(batch_end_timestamp), '1900-01-01'::timestamp)
-                  from audit.etl_batch_control
-                  where target_table = 'gold.fact_retail_sales'
-                    and batch_status = 'succeeded'
-              )
+        {{ changed_invoice_numbers() }}
     )
     {% endif %}
 ),

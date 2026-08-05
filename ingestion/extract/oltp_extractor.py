@@ -16,15 +16,22 @@ NOT responsible for:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
 import pandas as pd
+from sqlalchemy import text
 
 from ingestion.utils.logger import get_logger
 from ingestion.utils.watermark import get_watermark
 
 logger = get_logger(__name__)
+
+# Table/column names are SQL identifiers and cannot be bound parameters, so the
+# extractor accepts only plain identifiers — keeping injection off the table when
+# a name reaches the SQL string (MED-1). The watermark VALUE is always bound.
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class OLTPExtractor:
@@ -95,15 +102,15 @@ class OLTPExtractor:
                 source_table=table_name,
             )
             logger.info("Watermark value: %s", last_value)
-            sql = self._build_incremental_query(
+            sql, params = self._build_incremental_query(
                 table_name, watermark_column, last_value
             )
         else:
-            sql = self._build_full_load_query(table_name)
+            sql, params = self._build_full_load_query(table_name)
 
-        logger.debug("Extraction SQL: %s", sql)
+        logger.debug("Extraction SQL: %s | params: %s", sql, params)
 
-        df = pd.read_sql(sql, con=self._get_connection())
+        df = pd.read_sql(sql, con=self._get_connection(), params=params or None)
         logger.info("Extracted %d rows from %s", len(df), table_name)
         return df
 
@@ -111,23 +118,49 @@ class OLTPExtractor:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _build_full_load_query(self, table_name: str) -> str:
-        """Build a full-load SELECT query."""
+    @staticmethod
+    def _validate_identifier(name: str, kind: str) -> str:
+        """Reject anything that is not a plain SQL identifier (MED-1).
+
+        Table and column names cannot be bound parameters, so this guards the
+        one place a name reaches the SQL string. In the pipeline these come from
+        ingestion_config.yml (already an allowlist); this is the reusable-class
+        safety net for any direct or future caller.
+        """
+        if not isinstance(name, str) or not _SAFE_IDENTIFIER.match(name):
+            raise ValueError(
+                f"Unsafe {kind} identifier {name!r}: expected a plain SQL "
+                "identifier matching [A-Za-z_][A-Za-z0-9_]*"
+            )
+        return name
+
+    def _build_full_load_query(self, table_name: str) -> tuple[Any, dict[str, Any]]:
+        """Build a full-load SELECT query (identifier validated; no params)."""
         # TODO: add schema prefix from config if needed
-        return f"SELECT * FROM {table_name}"
+        self._validate_identifier(table_name, "table")
+        return text(f"SELECT * FROM {table_name}"), {}
 
     def _build_incremental_query(
         self,
         table_name: str,
         watermark_column: str,
         last_value: str | datetime | None,
-    ) -> str:
-        """Build an incremental SELECT query filtering on watermark."""
+    ) -> tuple[Any, dict[str, Any]]:
+        """Build an incremental SELECT filtering on the watermark.
+
+        The watermark VALUE is a **bound parameter** (`:watermark`), never
+        interpolated — so the driver sends it with its real type (no fragile
+        str() round-trip) and there is no value-injection surface. Table/column
+        are SQL identifiers (cannot be bound) and are validated first (MED-1).
+        """
+        self._validate_identifier(table_name, "table")
         if last_value is None:
-            # No previous run — extract everything
-            return f"SELECT * FROM {table_name}"
+            # No previous run — extract everything.
+            return text(f"SELECT * FROM {table_name}"), {}
+        self._validate_identifier(watermark_column, "watermark column")
         return (
-            f"SELECT * FROM {table_name} " f"WHERE {watermark_column} > '{last_value}'"
+            text(f"SELECT * FROM {table_name} WHERE {watermark_column} > :watermark"),
+            {"watermark": last_value},
         )
 
     def _get_connection(self) -> Any:

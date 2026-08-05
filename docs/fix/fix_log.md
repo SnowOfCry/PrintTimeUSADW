@@ -11,6 +11,32 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-012 — pipeline could run concurrently; failure-sweeper wasn't run-scoped
+
+| | |
+|---|---|
+| **Found** | audit round 002 (MED-11) |
+| **Affected** | `airflow/dags/printtime_elt_pipeline.py` |
+| **Severity** | MEDIUM (data integrity / orchestration) |
+
+### Cause
+
+The DAG set no `max_active_runs`, so two runs could overlap (a manual trigger during a scheduled run, or a long run spilling into the next day). Concurrent runs would share watermarks and `delete+insert` the same fact rows. Worse, `_fail_open_batches` failed **every** `running` batch for the pipeline (`initiated_by = PIPELINE`) without scoping to a run — so a failure in run A would mark run B's legitimately in-flight batches `failed`, corrupting B's audit trail and freezing its watermark.
+
+### Fix
+
+`max_active_runs=1` on the DAG — correct for any watermark-driven pipeline, and it fixes **both** symptoms at the root: with only one run ever active, there is no second run to corrupt, and the sweeper's existing `initiated_by = PIPELINE` filter is *automatically* scoped to the one active run.
+
+**Decision (deviates from the audit's literal recommendation):** the audit also suggested scoping the sweeper to the batch keys this run pushed to XCom. Implemented faithfully, that would *regress* cleanup of stranded **bronze** batches — bronze batches are opened inside the ingest task and never pushed to XCom, so a hard-killed ingest would leave a `running` bronze batch the sweeper could no longer catch. `max_active_runs=1` already removes the actual (concurrency) bug without that regression, so the sweeper's whole-pipeline filter was kept (now run-scoped for free). Run-id-level scoping remains available as a future defense-in-depth if `max_active_runs` is ever removed.
+
+Verified: `airflow dags details` reports `max_active_runs = 1`; DAG parses clean.
+
+### Class of mistake
+
+**Missing concurrency guard on stateful orchestration.** A watermark/`delete+insert` pipeline is not safe to run in parallel with itself; the default `max_active_runs` (16) silently allowed it. One line makes the whole design single-writer — and, as a bonus, made an unrelated sweeper correct.
+
+---
+
 ## FIX-011 — no SCD2 integrity tests: the append + post-hook invariants were unguarded
 
 | | |

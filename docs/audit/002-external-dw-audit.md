@@ -324,6 +324,12 @@ Effort:        0.5 day
 - **Recommendation:** Set `max_active_runs=1` on the DAG (one line, and correct for a
   watermark-driven pipeline), and additionally scope the sweeper's WHERE clause by
   `batch_key IN` the keys this run pushed to XCom. **Effort:** 1h.
+- **✅ RESOLVED (2026-08-05):** `max_active_runs=1` set on the DAG — this fixes both
+  symptoms at the root: no concurrent run can share watermarks/delete+insert, and
+  with a single active run the sweeper's `initiated_by = PIPELINE` filter is
+  automatically scoped to that run. The XCom-key scoping was intentionally **not**
+  applied: it would regress cleanup of stranded *bronze* batches (opened inside the
+  ingest task, never pushed to XCom). See `docs/fix/fix_log.md` FIX-012.
 
 ### MED-12 (NEW) — `silver_batch_id` falls back to −1 on any ad-hoc dbt run
 
@@ -544,7 +550,7 @@ teams — and would expect the remaining gate to fall quickly.
 | HIGH-6 | No roles/grants | HIGH | **OPEN — unchanged** |
 | HIGH-7 | Tests run after watermark commits | — | **NEW** |
 | MED-10 | Gold `etl_batch_id` NULL | — | **RESOLVED** (2026-08-05, FIX-006) |
-| MED-11 | No `max_active_runs`; unscoped sweeper | — | **NEW** |
+| MED-11 | No `max_active_runs`; unscoped sweeper | — | **RESOLVED** (2026-08-05, FIX-012) |
 | MED-12 | `silver_batch_id` −1 fallback | — | **NEW** |
 | LOW-8 | Shared `run_results.json` path | — | **NEW** |
 | MED-1..9, LOW-1..7 | Round 1 medium/low findings | — | **OPEN — verified unchanged** |

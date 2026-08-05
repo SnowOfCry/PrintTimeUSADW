@@ -37,7 +37,7 @@
         bronze_batch_id::bigint                    as silver_bronze_batch_id,
 
         -- ── silver's own metadata (stamped as this row is built) ────────────
-        {{ var('silver_batch_id', -1) }}::bigint   as silver_batch_id,
+        {{ require_batch_id('silver_batch_id') }}::bigint   as silver_batch_id,
         current_timestamp::timestamp               as silver_created_at_timestamp,
         current_timestamp::timestamp               as silver_updated_at_timestamp,
         bronze_is_deleted_flag::boolean            as silver_is_deleted_flag

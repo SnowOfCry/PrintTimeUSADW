@@ -11,6 +11,35 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-014 — batch_id fell back to a silent −1 on ad-hoc dbt runs
+
+| | |
+|---|---|
+| **Found** | audit round 002 (MED-12); same pattern in gold (MED-10) |
+| **Affected** | `macros/silver_lineage_and_metadata.sql`, `macros/gold_batch_id.sql` |
+| **Severity** | MEDIUM (lineage integrity) |
+
+### Cause
+
+`silver_batch_id` was `{{ var('silver_batch_id', -1) }}` — an ad-hoc `dbt run --select silver` (no var) silently stamped **−1**. Once the orchestrated path supplies a real key, the column is *mostly* trustworthy with occasional −1 sentinels, which is a worse failure mode than uniformly-meaningless: it invites trust. Gold's `gold_batch_id()` had the same `-1` fallback (from MED-10).
+
+### Fix
+
+A `require_batch_id(name)` macro (and matching logic in `gold_batch_id()`) that is **loud on run/build** but harmless elsewhere:
+- var supplied → use it;
+- var absent **and** `execute` **and** `flags.WHICH in ('run','build')` → `raise_compiler_error` with guidance;
+- otherwise (parse / compile / docs / test — nothing persisted) → return `-1` placeholder.
+
+The `execute` guard is the crux: dbt renders *every* model's Jinja during the parse phase, so without it the raise would fire for unselected models too (e.g. the DAG's `dbt run --select silver` would wrongly demand the gold var). `execute` is true only when a **selected** model is actually being built, so the guard fires precisely for a model being run without its batch var. Applied to **both** silver and gold — resolving the MED-10/MED-12 inconsistency (gold no longer silently stamps `-1` either).
+
+Verified: silver/gold run **without** the var fails loudly; the DAG's var-supplied `run --select silver` succeeds (gold not triggered); `dbt compile` / `dbt test` still work with no var; no test row was persisted with a placeholder.
+
+### Class of mistake
+
+**A sentinel that mixes with real data.** A default that "works" (−1) is worse than a loud failure once the column is *sometimes* real — consumers can't tell the sentinel from the truth. Fail on the operations that persist; stay quiet on the ones that don't.
+
+---
+
 ## FIX-013 — compose secrets fell back to committed/empty defaults
 
 | | |

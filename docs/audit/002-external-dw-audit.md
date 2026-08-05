@@ -343,6 +343,12 @@ Effort:        0.5 day
 - **Recommendation:** Either make the var required (`{{ var('silver_batch_id') }}` —
   dbt errors loudly if absent, forcing ad-hoc runs to pass one) or have ad-hoc runs
   open a real batch. Loud failure is preferable to a silent sentinel. **Effort:** 1h.
+- **✅ RESOLVED (2026-08-05):** a `require_batch_id()` macro makes the batch var
+  **loud on run/build** (raises with guidance) but returns a harmless `-1` for
+  parse/compile/docs/test (which persist nothing), gated on dbt's `execute` flag so
+  it fires only for a *selected* model being built — not for unselected models
+  during parse. Applied to **both** silver and gold, resolving the MED-10/MED-12
+  inconsistency. See `docs/fix/fix_log.md` FIX-014.
 
 ### LOW-8 (NEW) — `run_results.json` is a single shared path
 
@@ -551,7 +557,7 @@ teams — and would expect the remaining gate to fall quickly.
 | HIGH-7 | Tests run after watermark commits | — | **NEW** |
 | MED-10 | Gold `etl_batch_id` NULL | — | **RESOLVED** (2026-08-05, FIX-006) |
 | MED-11 | No `max_active_runs`; unscoped sweeper | — | **RESOLVED** (2026-08-05, FIX-012) |
-| MED-12 | `silver_batch_id` −1 fallback | — | **NEW** |
+| MED-12 | `silver_batch_id` −1 fallback | — | **RESOLVED** (2026-08-05, FIX-014) |
 | LOW-8 | Shared `run_results.json` path | — | **NEW** |
 | MED-1..9, LOW-1..7 | Round 1 medium/low findings | — | **OPEN — verified unchanged** |
 

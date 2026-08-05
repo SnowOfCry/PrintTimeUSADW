@@ -218,11 +218,17 @@ def _complete_gold_batches(**context: dict) -> None:
 
 
 def _fail_open_batches(**context: dict) -> None:
-    """Close any batch this pipeline left 'running' after a failure.
+    """Close any batch this run left 'running' after a failure.
 
     Runs only when an upstream task failed (trigger_rule=ONE_FAILED). Without
     it, a crashed run would strand 'running' rows forever — and, worse, a later
     manual fix could complete them and silently advance the facts' watermark.
+
+    The filter is `initiated_by = PIPELINE` (all layers — bronze/silver/gold),
+    which is correctly scoped to THIS run because the DAG sets max_active_runs=1
+    (MED-11): there is never a concurrent run whose in-flight batches this could
+    wrongly fail. This also catches stranded bronze batches (opened inside the
+    ingest task, so not available via XCom) that a key-scoped sweep would miss.
     """
     from sqlalchemy import text
 
@@ -255,6 +261,11 @@ with DAG(
     start_date=datetime(2025, 1, 1),
     schedule="@daily",
     catchup=False,
+    # MED-11: a watermark-driven pipeline must never run concurrently — two runs
+    # would share watermarks and delete+insert the same fact rows. This also makes
+    # _fail_open_batches correct: with a single active run, its
+    # initiated_by=PIPELINE filter only ever matches THIS run's stranded batches.
+    max_active_runs=1,
     tags=["elt", "printtime", "bronze", "silver", "gold"],
     doc_md=__doc__,
 ) as dag:

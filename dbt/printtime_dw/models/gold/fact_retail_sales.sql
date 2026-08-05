@@ -27,6 +27,14 @@
     incremental_strategy='delete+insert',
     unique_key='invoice_number',
     on_schema_change='fail',
+    indexes=[
+        {'columns': ['date_key']},
+        {'columns': ['cashier_key']},
+        {'columns': ['product_key']},
+        {'columns': ['customer_key']},
+        {'columns': ['store_key']},
+        {'columns': ['invoice_key']},
+    ],
     pre_hook="{{ audit_stage_before_image('invoice_number', 'invoice_number', changed_invoice_numbers(), reason_from_invoice_adjustment()) }}",
     post_hook="{{ audit_write_change_log('gold.fact_retail_sales', 'sales_line_key') }}"
 ) }}

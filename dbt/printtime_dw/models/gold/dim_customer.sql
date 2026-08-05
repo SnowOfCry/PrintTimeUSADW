@@ -25,6 +25,11 @@
     materialized='incremental',
     incremental_strategy='append',
     on_schema_change='fail',
+    indexes=[
+        {'columns': ['customer_id', 'is_current']},
+        {'columns': ['valid_from', 'valid_to']},
+        {'columns': ['first_order_date_key']},
+    ],
     post_hook=[
         "
         update {{ this }} d

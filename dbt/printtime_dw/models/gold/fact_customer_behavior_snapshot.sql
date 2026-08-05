@@ -22,7 +22,12 @@
 {{ config(
     materialized='incremental',
     incremental_strategy='append',
-    on_schema_change='fail'
+    on_schema_change='fail',
+    indexes=[
+        {'columns': ['snapshot_date_key']},
+        {'columns': ['customer_key']},
+        {'columns': ['last_order_date_key']},
+    ]
 ) }}
 
 {% set snapshot_date = var('snapshot_date', none) %}

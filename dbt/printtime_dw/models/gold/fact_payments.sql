@@ -33,6 +33,16 @@
     incremental_strategy='delete+insert',
     unique_key='source_record_id',
     on_schema_change='fail',
+    indexes=[
+        {'columns': ['invoice_key']},
+        {'columns': ['customer_key']},
+        {'columns': ['payment_method_key']},
+        {'columns': ['date_key']},
+        {'columns': ['payment_type_key']},
+        {'columns': ['cashier_key']},
+        {'columns': ['store_key']},
+        {'columns': ['parent_payment_key']},
+    ],
     pre_hook="{{ audit_stage_before_image('source_record_id', 'source_record_id', changed_payment_ids()) }}",
     post_hook="{{ audit_write_change_log('gold.fact_payments', 'payment_key') }}"
 ) }}

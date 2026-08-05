@@ -11,6 +11,31 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-008 — gold indexes silently dropped by `--full-refresh`, never recreated
+
+| | |
+|---|---|
+| **Found** | 2026-07-28, external audit round 002 (finding MED-9); confirmed live 2026-08-05 |
+| **Symptom** | The gold star had **0 of its ~33 performance indexes** — every fact FK-join and SCD2 lookup ran unindexed. |
+| **Affected** | all 11 gold models; `sql/gold/003_create_gold_indexes.sql` |
+| **Severity** | MEDIUM (performance) |
+
+### Cause
+
+The indexes were **DDL-managed** (`sql/gold/003`), but the gold **tables are dbt-managed** (ADR-015 #7). `dbt --full-refresh` does `DROP TABLE … CREATE TABLE …`, which drops the indexes, and dbt had no knowledge of `sql/gold/003`, so they were never recreated. Every full-refresh this session had quietly left gold completely unindexed — verified: 11 indexes present (all PK/unique), 0 of the 33 `idx_*`.
+
+### Fix
+
+Moved index management **into the dbt models** using dbt-postgres's declarative `indexes=[…]` config — one entry per index, replicating `sql/gold/003` exactly across all 11 gold models. dbt now (re)creates them on every build/full-refresh, so they cannot drift from the table. `sql/gold/003` was annotated **bootstrap/spec-reference only**; the dbt config is authoritative at runtime.
+
+Verified: a `dbt run --select gold --full-refresh` — the exact operation that used to drop them — now **creates** all 33 indexes (gold went 11 → 44 total); 165/165 tests pass.
+
+### Class of mistake
+
+**Two owners for one object.** The tables were dbt's; the indexes were the DDL's — so a dbt operation silently discarded DDL-owned state. Lesson: whatever tool materializes an object must own everything attached to it (indexes, constraints, grants), or a rebuild will drop what it doesn't know about.
+
+---
+
 ## FIX-007 — `audit.audit_log` never written: fact reloads destroyed rows with no trail
 
 | | |

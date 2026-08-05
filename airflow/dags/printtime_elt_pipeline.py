@@ -173,18 +173,32 @@ def _start_gold_batches(**context: dict) -> dict[str, int]:
 
     The fact models' watermark reads the last SUCCEEDED batch per target, so
     these rows only advance the watermark once completed after a good run.
+
+    Also pushes a 'gold_vars_json' XCom — the dbt --vars payload mapping each
+    target to its TEXT batch_id — so run_dbt_gold can stamp every gold row's
+    etl_batch_id with the real batch that wrote it (MED-10). etl_batch_id joins
+    to audit.etl_batch_control.batch_id (gold naming convention), so gold stamps
+    the text batch_id, not the integer batch_key that silver uses.
     """
     from ingestion.utils.batch_control import start_batch
 
     keys: dict[str, int] = {}
+    batch_ids: dict[str, str] = {}
     for target, load_type in GOLD_BATCH_TARGETS.items():
-        batch_key, _ = start_batch(
+        batch_key, batch_id = start_batch(
             pipeline_name=PIPELINE_NAME,
             source_system="silver",
             target_table=target,
             load_type=load_type,
         )
         keys[target] = batch_key
+        batch_ids[target] = batch_id
+    # Each gold model looks up its own target's batch_id from this map. Dims all
+    # share the 'gold.dimensions' batch by design (ADR-008); facts use their own.
+    context["ti"].xcom_push(
+        key="gold_vars_json",
+        value=json.dumps({"gold_batch_ids": batch_ids}),
+    )
     print(f"[{PIPELINE_NAME}] gold batches opened: {keys}")
     return keys
 
@@ -291,11 +305,15 @@ with DAG(
 
     run_dbt_gold = BashOperator(
         task_id="run_dbt_gold",
+        # String concatenation (not an f-string) so the {{ ... }} survives to
+        # Airflow's Jinja templating. --vars carries the {target: batch_id} map
+        # opened above so every gold row stamps its real etl_batch_id (MED-10).
         bash_command=(
             "cd " + DBT_PROJECT_DIR + " && "
-            "dbt run --select gold --profiles-dir " + DBT_PROJECT_DIR + " --no-version-check"
+            "dbt run --select gold --profiles-dir " + DBT_PROJECT_DIR + " --no-version-check "
+            "--vars '{{ ti.xcom_pull(task_ids=\"start_gold_batches\", key=\"gold_vars_json\") }}'"
         ),
-        doc_md="Runs the 14 gold objects (SCD2 dims, facts, date views).",
+        doc_md="Runs the 14 gold objects (SCD2 dims, facts, date views), stamping each row's etl_batch_id.",
     )
 
     complete_gold_batches = PythonOperator(

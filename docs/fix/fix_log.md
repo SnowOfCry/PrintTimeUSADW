@@ -11,6 +11,35 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-006 — gold rows stamped `etl_batch_id` NULL: row-level lineage was broken
+
+| | |
+|---|---|
+| **Found** | 2026-07-28, external audit round 002 (finding MED-10) |
+| **Symptom** | Every gold row had `etl_batch_id = NULL`, so the documented join `gold.etl_batch_id → audit.etl_batch_control.batch_id` was impossible. |
+| **Affected** | all 9 gold models with the column + `airflow/dags/printtime_elt_pipeline.py` |
+| **Severity** | MEDIUM (governance / lineage) |
+
+### Cause
+
+The gold batch machinery was fully built but the last wire was missing. `_start_gold_batches` opened one batch per target and returned `{target: batch_key}` via XCom, but `run_dbt_gold` ran `dbt run --select gold` with **no `--vars`**, so the models fell back to a hardcoded `null::varchar(50) as etl_batch_id`. Silver did it correctly (`--vars silver_batch_id`), but gold was never given the key.
+
+### Fix
+
+- `_start_gold_batches` now also captures the **text `batch_id`** per target and pushes a `gold_batch_ids` map as an XCom (`gold_vars_json`).
+- `run_dbt_gold` templates that map into `--vars` (string-concatenated so the `{{ }}` survives Airflow templating — same HIGH-7-safe pattern as `run_dbt_silver`).
+- New macro `gold_batch_id()` resolves each model's own id: facts use their own target (`gold.<model>`), every dimension resolves to the shared `gold.dimensions` batch (ADR-008 — dims load as one batch). All 9 models stamp `'{{ gold_batch_id() }}'::varchar(50)`; `-1` fallback for ad-hoc runs.
+
+**Two spec corrections vs. the naive approach:** (1) gold stamps the **text `batch_id`**, not the integer `batch_key` silver uses — the naming convention joins on `batch_id`; (2) dims **share** one `gold.dimensions` batch by design, so "each dim its own key" means each target's key, not one-per-dim.
+
+Verified: every non-seed gold row joins cleanly to `etl_batch_control.batch_id` (the `-1` seed members stay NULL by design); 165/165 tests pass.
+
+### Class of mistake
+
+**Last-wire-missing.** The hard parts (batch lifecycle, watermark, XCom map) were all built and working; a single un-passed `--vars` left the whole feature inert with a silent NULL default. Lesson: a hardcoded `null as x` placeholder is a smell — grep for them before calling a lineage feature done.
+
+---
+
 ## FIX-005 — SCD2 was Type-1 in disguise: load-date dating + `is_current` fact joins
 
 | | |

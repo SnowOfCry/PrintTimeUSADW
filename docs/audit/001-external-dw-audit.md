@@ -418,6 +418,14 @@ Effort:        1 day
 - **Recommendation:** Add dbt_utils (there is no packages.yml at all) and use
   `dbt_utils.unique_combination_of_columns` on `(source_record_id)` filtered
   `where is_current`, plus a singular test for range overlaps. **Effort:** half day.
+- **✅ RESOLVED (2026-08-05):** all three SCD2 invariants are now singular tests
+  that gate the watermark (HIGH-7): `assert_scd2_one_current_version_per_entity`,
+  `assert_scd2_no_overlapping_versions`, and `assert_scd2_row_version_contiguous`
+  (all six SCD2 dims), plus a bonus `assert_fact_payments_refunds_are_negative`.
+  Implemented as singular tests rather than adding dbt_utils/packages.yml (the gap
+  was the missing tests, not the tool; dbt_packages is gitignored so a dependency
+  would need `dbt deps` wired into the DAG + both images + CI). Each proven to
+  catch a seeded violation. See `docs/fix/fix_log.md` FIX-011.
 
 ### MED-6 — CI cannot catch a broken dbt model or DAG
 

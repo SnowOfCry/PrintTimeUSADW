@@ -11,6 +11,37 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-011 — no SCD2 integrity tests: the append + post-hook invariants were unguarded
+
+| | |
+|---|---|
+| **Found** | audit round 001 (MED-5) |
+| **Affected** | `dbt/printtime_dw/tests/` (new singular tests) |
+| **Severity** | MEDIUM (data integrity / test coverage) |
+
+### Cause
+
+Gold had good generic tests (uniqueness, not-null, relationships, accepted-values) but nothing tested the **SCD2 invariants** the custom append + post-hook pattern can violate on a mid-run failure (insert succeeded, post-hook didn't → two current rows → the next run's effective-date join fans out and inserts duplicate versions). The audit named three: exactly one current version per entity, no overlapping validity ranges, and `row_version` contiguity.
+
+### Fix
+
+Three singular tests (all gate the watermark via `run_dbt_tests`, HIGH-7, so a violated invariant holds the pipeline instead of shipping fan-out):
+
+- `assert_scd2_one_current_version_per_entity` — exactly one `is_current` per `source_record_id` (added earlier with the SCD2 effective-dating fix, FIX-005).
+- `assert_scd2_no_overlapping_versions` — no entity has two versions whose `[valid_from, valid_to)` windows overlap (open/current windows treated as +∞; contiguous windows are fine).
+- `assert_scd2_row_version_contiguous` — each entity's `row_version` set is exactly `{1..N}` (no gaps/dupes).
+- **Bonus** `assert_fact_payments_refunds_are_negative` — every refund (resolved `parent_payment_key`) is stored negative, protecting the `SUM`-nets-refunds convention.
+
+All six SCD2 dims are covered by each test. **Decision:** implemented as singular tests rather than adding `dbt_utils`/`packages.yml` — the finding is about the missing *tests*, not the tool, and singular tests close it with zero new dependency (adding dbt_utils would require wiring `dbt deps` into the DAG + both Docker images + CI, since `dbt_packages/` is gitignored).
+
+Verified: all pass on clean data (168 tests green), and each detection query was proven to *catch* a seeded violation (two open versions → flagged; a `{1,3}` version gap → flagged) while leaving valid contiguous/adjacent cases alone.
+
+### Class of mistake
+
+**Untested invariants in hand-rolled logic.** A custom SCD2 pattern earns its flexibility but loses the guarantees a built-in would provide — so the invariants that make it correct have to be asserted explicitly, or a partial failure ships silently.
+
+---
+
 ## FIX-010 — bronze ingestion hardening: watermark race, retry duplicates, snapshot stacking
 
 | | |

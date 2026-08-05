@@ -351,6 +351,13 @@ Effort:        1 day
 - **Recommendation:** Parameterize the value (`WHERE {col} > %(wm)s` via
   SQLAlchemy `text()` bind params) and validate table/column names against an
   allowlist from `information_schema`. **Effort:** 2h.
+- **✅ RESOLVED (2026-08-05):** the watermark value is now a **bound parameter**
+  (`WHERE {col} > :watermark` via SQLAlchemy `text()`), so the driver sends its real
+  type — no `str()` round-trip and no value-injection surface. Table/column identifiers
+  (which can't be bound) are validated against a safe-identifier pattern
+  (`[A-Za-z_][A-Za-z0-9_]*`); the true allowlist is already enforced upstream by
+  `ingestion/main.py` against `ingestion_config.yml`. Unit tests cover both the binding
+  and injection rejection. See `docs/fix/fix_log.md` FIX-009.
 
 ### MED-2 — Watermark semantics can permanently miss rows
 

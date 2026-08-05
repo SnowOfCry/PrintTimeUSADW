@@ -11,6 +11,33 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-009 — extractor built SQL by f-string interpolation (value + identifiers)
+
+| | |
+|---|---|
+| **Found** | 2026 audit round 001 (finding MED-1) |
+| **Symptom** | `WHERE {watermark_column} > '{last_value}'` — the watermark value was interpolated into the SQL string via `str()`, and table/column names were interpolated too. |
+| **Affected** | `ingestion/extract/oltp_extractor.py` + its unit tests |
+| **Severity** | MEDIUM (security / robustness) |
+
+### Cause
+
+`_build_incremental_query` and `_build_full_load_query` returned f-string SQL. The **value** round-tripped through `str()` (pandas Timestamp → string → SQL literal) — fragile against timezone/precision — and any name reaching the string was an injection surface. Low risk today (inputs come from `ingestion_config.yml`), but a latent hazard for any future/direct caller.
+
+### Fix
+
+- **Value → bound parameter.** The builders now return a SQLAlchemy `text()` clause plus a params dict; the watermark is bound (`> :watermark`) and passed to `pd.read_sql(..., params=...)`, so the driver sends it with its real type. No `str()` literal, no value injection.
+- **Identifiers → validated.** Table/column names can't be bound (they're SQL identifiers), so a `_validate_identifier()` guard rejects anything outside `[A-Za-z_][A-Za-z0-9_]*`. The true allowlist is already enforced upstream (`main.py` resolves the table from `ingestion_config.yml`); this is the reusable-class safety net.
+- Unit tests updated to the `(text, params)` signature + new coverage that injection payloads (`"customer; drop table x"`, `"updated_at) OR 1=1"`, …) raise `ValueError`.
+
+Verified: the built query is `SELECT * FROM invoice WHERE updated_at > :watermark` with the value in params (never in the SQL text); a real bound-param query ran against the OLTP source; all injection payloads rejected.
+
+### Class of mistake
+
+**String-built SQL.** Even with trusted inputs, interpolating values into SQL is fragile (type round-trips) and one refactor away from injection. Values belong in bind params; identifiers, which can't be bound, belong behind an allowlist/validation.
+
+---
+
 ## FIX-008 — gold indexes silently dropped by `--full-refresh`, never recreated
 
 | | |

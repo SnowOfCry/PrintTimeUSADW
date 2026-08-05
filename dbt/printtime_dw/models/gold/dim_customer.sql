@@ -138,7 +138,7 @@ final as (
         record_hash,
         source_system,
         source_record_id,
-        null::varchar(50)               as etl_batch_id,
+        '{{ gold_batch_id() }}'::varchar(50) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
         current_timestamp::timestamp    as etl_load_timestamp,
         current_timestamp::timestamp    as etl_updated_timestamp,
         -- Effective date (audit HIGH-3), never the load date. The source carries only

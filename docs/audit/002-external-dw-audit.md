@@ -302,6 +302,14 @@ Effort:        0.5 day
 - **Recommendation:** `start_gold_batches` already returns `{target: batch_key}` via
   XCom. Template it into `run_dbt_gold` as `--vars` exactly as the silver run does, and
   replace the NULL literal with `{{ var('gold_batch_id', -1) }}`. **Effort:** 2h.
+- **✅ RESOLVED (2026-08-05):** `_start_gold_batches` now also exposes the TEXT `batch_id`
+  per target and pushes a `gold_batch_ids` map; `run_dbt_gold` templates it into `--vars`;
+  a `gold_batch_id()` macro resolves each model's own id (facts → own target, dims → the
+  shared `gold.dimensions` batch per ADR-008); all 9 models stamp
+  `'{{ gold_batch_id() }}'::varchar(50)`. Note the recommendation's `batch_key` was
+  corrected to the **text `batch_id`**, since the naming convention joins on `batch_id`.
+  Verified: every non-seed gold row joins cleanly to `etl_batch_control.batch_id`; 165/165
+  tests pass. See `docs/fix/fix_log.md` FIX-006.
 
 ### MED-11 (NEW) — No `max_active_runs`; the sweeper is not scoped to a DAG run
 
@@ -517,7 +525,7 @@ teams — and would expect the remaining gate to fall quickly.
 | HIGH-5 | No disaster recovery | HIGH | **OPEN — unchanged** |
 | HIGH-6 | No roles/grants | HIGH | **OPEN — unchanged** |
 | HIGH-7 | Tests run after watermark commits | — | **NEW** |
-| MED-10 | Gold `etl_batch_id` NULL | — | **NEW** |
+| MED-10 | Gold `etl_batch_id` NULL | — | **RESOLVED** (2026-08-05, FIX-006) |
 | MED-11 | No `max_active_runs`; unscoped sweeper | — | **NEW** |
 | MED-12 | `silver_batch_id` −1 fallback | — | **NEW** |
 | LOW-8 | Shared `run_results.json` path | — | **NEW** |

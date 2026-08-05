@@ -464,6 +464,10 @@ Effort:        1 day
   but defaults that work are defaults that ship.
 - **Recommendation:** Remove both fallbacks so compose fails loudly when unset.
   **Effort:** minutes.
+- **✅ RESOLVED (2026-08-05):** both converted to the fail-closed `${VAR:?message}`
+  form — compose now aborts if `AIRFLOW_FERNET_KEY` / `AIRFLOW_SECRET_KEY` are
+  unset instead of using the committed/empty default. Verified: config fails loudly
+  when the secret is absent. See `docs/fix/fix_log.md` FIX-013.
 
 ### MED-9 — dbt `--full-refresh` silently drops DDL-managed indexes and constraints
 

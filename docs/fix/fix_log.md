@@ -11,6 +11,30 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-013 — compose secrets fell back to committed/empty defaults
+
+| | |
+|---|---|
+| **Found** | audit round 001 (MED-8) |
+| **Affected** | `docker-compose.yml` |
+| **Severity** | MEDIUM (security) |
+
+### Cause
+
+Two Airflow secrets used `${VAR:-default}` fallbacks: `AIRFLOW__WEBSERVER__SECRET_KEY` fell back to the committed literal `changeme_in_env`, and `AIRFLOW__CORE__FERNET_KEY` fell back to empty (Airflow then generates an ephemeral key, so stored connection passwords can't be decrypted after a restart). Local-only today (ADR-002), but a default that works is a default that ships.
+
+### Fix
+
+Converted both to the fail-closed `${VAR:?message}` form — `docker compose up/config` now aborts with a clear message if the secret is unset, instead of silently using a weak default. Scoped to the two secrets the finding named (MED-8).
+
+Verified: `docker compose config` passes with `.env` present; with the secret absent it fails loudly — `required variable AIRFLOW_SECRET_KEY is missing a value: AIRFLOW_SECRET_KEY must be set in .env`.
+
+### Class of mistake
+
+**A default that works is a default that ships.** A fallback secret removes the forcing function that would otherwise make a deployer set a real one; fail-closed keeps the guardrail.
+
+---
+
 ## FIX-012 — pipeline could run concurrently; failure-sweeper wasn't run-scoped
 
 | | |

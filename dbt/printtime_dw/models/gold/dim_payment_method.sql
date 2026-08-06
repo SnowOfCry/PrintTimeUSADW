@@ -72,7 +72,7 @@ changed as (
     select
         s.*
         {% if is_incremental() %}
-        , c.row_version as current_row_version
+        , coalesce(c.row_version, 0) as current_row_version
         {% else %}
         , 0::integer    as current_row_version
         {% endif %}

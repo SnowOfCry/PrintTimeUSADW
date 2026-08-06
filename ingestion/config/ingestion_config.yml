@@ -27,38 +27,49 @@ tables:
   - name: ref_state
     bronze_table: ref_state
     load_strategy: full_load
+    key_columns: [state_code]       # natural key for full-load hash-skip (MED-7)
   - name: ref_invoice_status
     bronze_table: ref_invoice_status
     load_strategy: full_load
+    key_columns: [status_code]
   - name: ref_payment_status
     bronze_table: ref_payment_status
     load_strategy: full_load
+    key_columns: [status_code]
   - name: payment_method
     bronze_table: ref_payment_method
     load_strategy: full_load
+    key_columns: [payment_method_id]
   - name: payment_type
     bronze_table: ref_payment_type
     load_strategy: full_load
+    key_columns: [payment_type_id]
   - name: tax_rate
     bronze_table: ref_tax_rate
     load_strategy: full_load
+    key_columns: [tax_rate_id]
 
   # --- Dimension-like tables (full reload; modest size) ---
   - name: store
     bronze_table: oltp_store
     load_strategy: full_load
+    key_columns: [store_id]
   - name: department
     bronze_table: oltp_department
     load_strategy: full_load
+    key_columns: [department_id]
   - name: product_category
     bronze_table: oltp_product_category
     load_strategy: full_load
+    key_columns: [category_id]
   - name: employee
     bronze_table: oltp_employee
     load_strategy: full_load
+    key_columns: [employee_id]
   - name: product
     bronze_table: oltp_product
     load_strategy: full_load
+    key_columns: [product_id]
 
   # --- Customer data (incremental) ---
   - name: customer

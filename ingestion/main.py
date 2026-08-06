@@ -136,6 +136,7 @@ def run(pipeline_name: str, table_name: str, strategy: str) -> None:
             source_system=source_system,
             batch_id=batch_key,
             dw_engine=engine,
+            key_columns=table_cfg.get("key_columns"),  # full-load hash-skip (MED-7)
         )
         rows_loaded = loader.load_dataframe_to_bronze(
             df=df, strategy=strategy, batch_id=batch_key

@@ -449,11 +449,12 @@ Effort:        1 day
 - **Recommendation:** Implement backlog #1's hash-skip (loader already computes
   `bronze_row_hash`; skip rows whose hash matches the latest bronze row per key).
   **Effort:** ~1h (backlog's own estimate).
-- **✅ RESOLVED (2026-08-05):** full-load loads now hash-skip rows whose
-  `bronze_row_hash` matches the latest snapshot (the hash covers the natural key,
-  so unchanged rows hash identically). Proven: re-loading an unchanged table
-  appended 0 rows. Incremental tables are intentionally not hash-skipped. See
-  FIX-010.
+- **✅ RESOLVED (2026-08-05):** full-load loads now hash-skip unchanged rows.
+  Incremental tables are intentionally not hash-skipped. See FIX-010.
+- **⚠️ CORRECTED (2026-08-06):** the initial fix compared against the latest
+  *batch*, which is partial after the first hash-skip (re-stacking the snapshot on
+  the next run). Now compares against the latest hash **per natural key**
+  (`key_columns` in `ingestion_config.yml`). See FIX-016.
 
 ### MED-8 — Airflow webserver secret has a committed default; Fernet key optional
 

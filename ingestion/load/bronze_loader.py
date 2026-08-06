@@ -128,11 +128,18 @@ class BronzeLoader:
         source_system: str | None = None,
         batch_id: int | None = None,
         dw_engine: Any = None,
+        key_columns: list[str] | None = None,
     ) -> None:
         self.pipeline_name = pipeline_name
         if not _SAFE_IDENTIFIER.match(target_table):
             raise ValueError(f"Unsafe bronze target table name: {target_table!r}")
         self.target_table = target_table
+        # Natural key for full-load hash-skip (MED-7). Interpolated into the
+        # snapshot query, so validate each as a plain identifier.
+        for kc in key_columns or []:
+            if not _SAFE_IDENTIFIER.match(kc):
+                raise ValueError(f"Unsafe key column name: {kc!r}")
+        self.key_columns = list(key_columns or [])
         self.source_table_name = source_table_name or target_table
         self.source_system = source_system or (
             "ref" if target_table.startswith("ref_") else "oltp"
@@ -328,19 +335,28 @@ class BronzeLoader:
         return work[keep]
 
     def _latest_snapshot_hashes(self, engine: Any) -> set[str]:
-        """Return the bronze_row_hash set of this table's most recent batch (MED-7).
+        """Return the CURRENT bronze state's hashes = the LATEST bronze_row_hash
+        per natural key (MED-7).
 
-        Used for full-load hash-skip: a row whose business hash (which includes
-        its natural key) matches the last snapshot is unchanged and is not
-        re-appended. Empty on the first load. The current load's rows are not in
-        the table yet, so MAX(bronze_batch_id) is the *previous* snapshot.
-        `target_table` is validated as a plain identifier in __init__, so the
-        interpolation below is safe.
+        Comparing against the single most-recent BATCH is wrong: after a
+        hash-skipped run that batch is PARTIAL (only the rows that changed), so
+        the next run would treat every unchanged row as new and re-append the
+        whole snapshot. Grouping by the natural key (highest bronze_record_id
+        wins) gives the true current state — and correctly handles reverts, since
+        a reverted value's hash is no longer the latest for its key, so it still
+        appends.
+
+        Requires key_columns (from ingestion_config.yml); without them the current
+        state can't be identified, so return empty (no skip = safe, just appends).
+        target_table + key_columns are validated identifiers (__init__).
         """
+        if not self.key_columns:
+            return set()
+        keys = ", ".join(self.key_columns)
         sql = text(
-            f"SELECT bronze_row_hash FROM bronze.{self.target_table} "
-            f"WHERE bronze_batch_id = "
-            f"(SELECT MAX(bronze_batch_id) FROM bronze.{self.target_table})"
+            f"SELECT DISTINCT ON ({keys}) bronze_row_hash "
+            f"FROM bronze.{self.target_table} "
+            f"ORDER BY {keys}, bronze_record_id DESC"
         )
         with engine.connect() as conn:
             rows = conn.execute(sql).fetchall()

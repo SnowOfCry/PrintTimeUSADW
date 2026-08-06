@@ -11,6 +11,38 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-016 — full-load hash-skip compared against a PARTIAL batch, re-stacking the snapshot
+
+| | |
+|---|---|
+| **Found** | 2026-08-06, during a monthly incremental test run (a new-month load surfaced it) |
+| **Symptom** | On the run *after* a hash-skipped run, a full-load reference/dimension table re-appended its **entire** snapshot — `oltp_product` re-appended **985/1000** unchanged rows. |
+| **Affected** | `ingestion/load/bronze_loader.py`, `ingestion/config/ingestion_config.yml`, `ingestion/main.py` |
+| **Severity** | MEDIUM (storage / lineage) — a regression in the MED-7 fix (FIX-010) |
+
+### Cause
+
+The MED-7 hash-skip (`_latest_snapshot_hashes`) compared incoming rows against `MAX(bronze_batch_id)` — the single most-recent batch. But **after the first hash-skip, that batch is partial**: it holds only the rows that changed. So the *next* run compared the full source against a batch of (say) 15 rows, found 985 rows "not in the last snapshot," and re-appended them. Proven by the batch inventory: `521=1000` (baseline), `563=15` (a partial hash-skipped batch), `588=985` (the wrongful re-append). The row hash itself was stable (an unchanged product had the identical hash in both batches) — the comparison basis was wrong. *The latest **batch** is not the current **state**.*
+
+### Fix
+
+Compare against the **latest `bronze_row_hash` per natural key**, not the latest batch:
+
+```sql
+SELECT DISTINCT ON (<key>) bronze_row_hash
+FROM bronze.<table> ORDER BY <key>, bronze_record_id DESC
+```
+
+The natural key per full-load table is declared as `key_columns` in `ingestion_config.yml` (e.g. product → `product_id`, state → `state_code`), passed through `main.py` to the loader, and validated as an identifier. This also fixes **reverts** correctly: a reverted value's hash is no longer the *latest* for its key, so it still appends. Without `key_columns` the loader skips nothing (safe — just appends).
+
+Verified: re-running the `product` full-load now hash-skips **1000/1000** unchanged rows (**appended 0**, was 985); a second no-change run also appends 0.
+
+### Class of mistake
+
+**A partial increment mistaken for a full snapshot.** The "current state" of an append-only table is the latest row *per key*, not the contents of the most recent write — which, once you optimize writes to only-changed rows, is exactly the wrong thing to diff against.
+
+---
+
 ## FIX-015 — a new entity arriving on an incremental run got `row_version = NULL`
 
 | | |

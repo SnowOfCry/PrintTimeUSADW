@@ -11,6 +11,48 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-015 — a new entity arriving on an incremental run got `row_version = NULL`
+
+| | |
+|---|---|
+| **Found** | 2026-08-06, code review of the SCD2 incremental path |
+| **Symptom** | Latent — the incremental gold build **fails** (`null value in column "row_version" … violates not-null constraint`) the first time a brand-new entity arrives on an incremental run. Never fired because the current dataset loads every entity at the initial full-refresh build. |
+| **Affected** | all six SCD2 dims (`dim_customer/store/cashier/product/invoice/payment_method`) |
+| **Severity** | MEDIUM (correctness — blocks incremental onboarding of new entities) |
+
+### Cause
+
+Each SCD2 dim carries the existing version forward in the `changed` CTE and computes the next version in `keyed`:
+
+```sql
+-- changed (incremental branch)
+, c.row_version as current_row_version     -- NULL for a brand-new entity
+-- keyed
+(current_row_version + 1) as row_version   -- NULL + 1 = NULL
+```
+
+On an incremental run, a brand-new entity has **no match** in the `left join {{ this }} c`, so `c.row_version` is NULL → `current_row_version` is NULL → `row_version = NULL + 1 = NULL`. The `{% else %}` (first-build) branch was already correct (`0::integer as current_row_version`); only the incremental branch was unguarded.
+
+**What actually happens (and why the symptom is a *loud failure*, not silent corruption):** `row_version` carries a `not_null` **model-contract constraint**, enforced as a real DB `NOT NULL`. So the NULL is rejected at insert and the build fails — *no new entity can be onboarded incrementally.* Had the column been nullable, the same NULL would have cascaded silently: the entity's current version would have `row_version = NULL`, the close-out post-hook (`nv.row_version = d.row_version + 1`) could never match a NULL, the old version would never close, and the dim would end with **two `is_current` rows** (fanning out facts and failing `assert_scd2_one_current_version_per_entity`). The contract is what turned silent SCD2 corruption into a loud, safe failure (ADR-012).
+
+### Fix
+
+One-line null-guard in the incremental branch of all six dims, mirroring the first-build path:
+
+```sql
+, coalesce(c.row_version, 0) as current_row_version
+```
+
+A new entity now resolves to `current_row_version = 0 → row_version = 1 → valid_from = '1900-01-01'`, identical to the first-build path.
+
+Verified: removed a customer from `dim_customer` so an incremental run saw it as new — with the old code the run **failed** with the NOT NULL violation; with the fix the row loaded as `row_version = 1`, `valid_from = '1900-01-01'`; then changing it produced `row_version = 2` with the old version correctly closed (one current version). `assert_scd2_one_current_version_per_entity` and `assert_scd2_row_version_contiguous` both pass; full suite 168/168 green. (No new test added — the `row_version` `not_null` contract already guards the invariant, more strongly than a test would.)
+
+### Class of mistake
+
+**Unguarded NULL from an outer join in incremental logic.** A `left join` to `{{ this }}` returns NULL for rows that don't exist yet — exactly the *new*-entity case an incremental model exists to handle. Any arithmetic or comparison on that carried-forward value must `coalesce` to the first-build default, or the "new" path silently diverges from the "first build" path.
+
+---
+
 ## FIX-014 — batch_id fell back to a silent −1 on ad-hoc dbt runs
 
 | | |

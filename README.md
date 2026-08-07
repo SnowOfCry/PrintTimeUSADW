@@ -393,9 +393,10 @@ feature/*   one branch per feature or table
 hotfix/*    emergency fixes off main
 ```
 
-CI runs on every push: **ruff** (lint), **mypy** (types), **pytest** (unit), and
-`docker compose config` validation. Data quality is enforced by **dbt tests** and the model
-contracts.
+CI runs on every push: **ruff** (lint), **mypy** (types), **pytest** (unit),
+`docker compose config` validation, and a **`dbt build`** against an ephemeral `postgres:16` —
+which compiles every model, enforces the contracts, and runs all **168 dbt data tests**, so a
+broken model or failing test fails the PR before merge (not after).
 
 ---
 

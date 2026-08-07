@@ -51,7 +51,7 @@ HIGH (CI does not test dbt).
 
 | ID | Finding | First raised | Status at 003 |
 |---|---|---|---|
-| **AUDIT-003-H1** | CI runs lint/unit/compose-validate but never compiles or tests dbt — the 168 data tests and all model logic are ungated on PRs | 003 | **OPEN (new)** — top remediation item; see [003 §4](003-external-dw-audit.md) |
+| **AUDIT-003-H1** | CI runs lint/unit/compose-validate but never compiles or tests dbt — the 168 data tests and all model logic are ungated on PRs | 003 | **CLOSED** ([`fix_log.md` FIX-017](../fix/fix_log.md)) — added a `dbt-build` CI job on an ephemeral `postgres:16` that runs the full build + all 168 tests on every PR. Validated: `dbt build` → PASS=213, 0 errors. |
 | HIGH-7 | Data-quality tests run *after* the watermark commits | 002 | **CLOSED** — tests now gate the watermark (HIGH-7 / FIX-004); proven a failing test holds the fact batches `running`. Alerting tracked separately (003-M1). |
 | HIGH-5 | No disaster recovery | 001 | **ADDRESSED** ([ADR-018](../adr/018-disaster-recovery-and-backup.md)); DR re-scored 0 → 3. Remaining: scheduled/proven restore drill (003-M5). |
 | HIGH-3 | SCD2 dated by load date; facts resolve `is_current` | 001 | **CLOSED** — effective-dating by source instant + event-date fact resolution; SCD2 null-guard (FIX-015). Verified: no-overlap / one-current guards green across 5-version chains. |

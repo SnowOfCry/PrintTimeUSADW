@@ -67,6 +67,15 @@ x-airflow-common: &airflow-common
       condition: service_healthy
   networks:
     - elt_network
+  # Failure isolation (AUDIT-003-M2): cap each Airflow service so a runaway task
+  # cannot starve the host or the database. Honored by `docker compose up`.
+  deploy:
+    resources:
+      limits:
+        memory: 2G
+        cpus: "2.0"
+      reservations:
+        memory: 512M
 
 services:
 
@@ -94,6 +103,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
 
   # ---------------------------------------------------------------------------
   # pgAdmin 4 — PostgreSQL GUI
@@ -114,6 +130,13 @@ services:
         condition: service_healthy
     networks:
       - elt_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
 
   # ---------------------------------------------------------------------------
   # Airflow — init service (runs once to bootstrap the metadata DB)
@@ -179,6 +202,13 @@ services:
         condition: service_healthy
     networks:
       - elt_network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
     # Override at runtime: docker compose run dbt dbt run --select silver
     command: ["dbt", "debug"]
 

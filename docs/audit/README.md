@@ -15,44 +15,47 @@ PrintTimeUSA Data Warehouse. Each audit is an independent, evidence-based review
 | # | Date | Commit | Score | Classification | Headline |
 |---|---|---|---|---|---|
 | [001](001-external-dw-audit.md) | 2026-07-28 | `2b9433c` (v0.2.0-gold) | 2.80 / 5 | DEVELOPMENT READY | Excellent design and documentation; orchestration, recovery, security and observability unbuilt. 6 HIGH findings. |
-| [002](002-external-dw-audit.md) | 2026-07-28 | `15c1c52` (v0.3.0-orchestration) | 3.05 / 5 | DEVELOPMENT READY (upper end) | Pipeline now genuinely runs and gold batches drive real incremental loads. 2 HIGH closed, 1 new: tests run after the watermark commits. |
+| [002](002-external-dw-audit.md) | 2026-07-28 | `15c1c52` (v0.3.0-orchestration) | 3.05 / 5 | DEVELOPMENT READY (upper end) | Pipeline now genuinely runs and gold batches drive real incremental loads. 2 HIGH closed, 1 new: tests run after the watermark commits. *(superseded by 003)* |
+| [003](003-external-dw-audit.md) | 2026-08-07 | `8d57789` (develop) | 3.90 / 5 | **PRE-PRODUCTION** | Every prior HIGH closed (SCD2 effective-dating, RBAC, tests-gate-watermark, DR). 1 new HIGH: CI never compiles/tests dbt. Core platform strong; remaining gaps are operational (alerting, resource limits, PII masking, secret manager). |
 
 ## Score trajectory
 
-| Category | 001 | 002 |
-|---|---|---|
-| Architecture | 4 | 4 |
-| Data Modeling | 3 | 3 |
-| Data Quality | 3 | 3 |
-| Incremental Processing | 2 | **3** |
-| Data Governance | 3 | 3 |
-| Data Lineage | 4 | 4 |
-| dbt | 4 | 4 |
-| Airflow | 1 | **3** |
-| Python | 3 | 3 |
-| PostgreSQL | 3 | 3 |
-| Scalability | 3 | 3 |
-| Performance | 3 | 3 |
-| Security | 2 | 2 |
-| Docker / Infrastructure | 3 | 3 |
-| CI/CD | 2 | 2 |
-| Observability | 2 | **3** |
-| Reliability | 2 | **3** |
-| Disaster Recovery | 0 | 0 |
-| Documentation | 5 | 5 |
-| Maintainability | 4 | 4 |
-| **Overall** | **2.80** | **3.05** |
-
-## Open HIGH findings
-
-Carried into round 002 and still open. See the round-002 report for full detail.
-
-| ID | Finding | First raised | Status |
+| Category | 001 | 002 | 003 |
 |---|---|---|---|
-| HIGH-7 | Data-quality tests run *after* `complete_gold_batches` commits the watermark, so a failing test neither blocks bad data nor notifies anyone | 002 | **Data-integrity part FIXED** (see [`fix_log.md` FIX-004](../fix/fix_log.md)) — tests now gate the watermark; proven a failed test holds it. Alerting still open (see HIGH-4). Pending re-score in round 003. |
-| HIGH-5 | No disaster recovery: no backup, no restore procedure, no RPO/RTO, nothing tested | 001 | **ADDRESSED** ([ADR-018](../adr/018-disaster-recovery-and-backup.md)) — tested logical backup/restore (`scripts/backup_warehouse.sh` / `restore_warehouse.sh`), RPO ≤24h / RTO ~1min (measured: restored into a scratch DB, row counts tied out), plus medallion reproducibility as fallback. Remaining: offsite copy + scheduled cadence. Pending re-score. |
-| HIGH-3 | SCD2 versions dated by load date, and facts resolve `is_current`, so point-in-time reporting is unachievable | 001 | Open |
-| HIGH-6 | One all-privilege database user for every service; ADR-013 §3 access model unimplemented | 001 | Open |
-| HIGH-4 | Ingestion is one serial task; no alerting on failure | 001 | Reduced — failure sweeper added; isolation and alerting still open |
+| Architecture | 4 | 4 | **5** |
+| Data Modeling | 3 | 3 | **4** |
+| Data Quality | 3 | 3 | **4** |
+| Incremental Processing | 2 | 3 | **5** |
+| Data Governance | 3 | 3 | **4** |
+| Data Lineage | 4 | 4 | 4 |
+| dbt | 4 | 4 | 4 |
+| Airflow | 1 | 3 | **4** |
+| Python | 3 | 3 | **4** |
+| PostgreSQL | 3 | 3 | **4** |
+| Scalability | 3 | 3 | 3 |
+| Performance | 3 | 3 | **4** |
+| Security | 2 | 2 | **4** |
+| Docker / Infrastructure | 3 | 3 | 3 |
+| CI/CD | 2 | 2 | 2 |
+| Observability | 2 | 3 | **4** |
+| Reliability | 2 | 3 | **4** |
+| Disaster Recovery | 0 | 0 | **3** |
+| Documentation | 5 | 5 | 5 |
+| Maintainability | 4 | 4 | **5** |
+| **Overall** | **2.80** | **3.05** | **3.90** |
+
+## HIGH findings — status as of round 003
+
+All HIGH findings from rounds 001–002 are now **closed or addressed**. Round 003 raises **one** new
+HIGH (CI does not test dbt).
+
+| ID | Finding | First raised | Status at 003 |
+|---|---|---|---|
+| **AUDIT-003-H1** | CI runs lint/unit/compose-validate but never compiles or tests dbt — the 168 data tests and all model logic are ungated on PRs | 003 | **CLOSED** ([`fix_log.md` FIX-017](../fix/fix_log.md)) — added a `dbt-build` CI job on an ephemeral `postgres:16` that runs the full build + all 168 tests on every PR. Validated: `dbt build` → PASS=213, 0 errors. |
+| HIGH-7 | Data-quality tests run *after* the watermark commits | 002 | **CLOSED** — tests now gate the watermark (HIGH-7 / FIX-004); proven a failing test holds the fact batches `running`. Alerting tracked separately (003-M1). |
+| HIGH-5 | No disaster recovery | 001 | **ADDRESSED** ([ADR-018](../adr/018-disaster-recovery-and-backup.md)); DR re-scored 0 → 3. Remaining: scheduled/proven restore drill (003-M5). |
+| HIGH-3 | SCD2 dated by load date; facts resolve `is_current` | 001 | **CLOSED** — effective-dating by source instant + event-date fact resolution; SCD2 null-guard (FIX-015). Verified: no-overlap / one-current guards green across 5-version chains. |
+| HIGH-6 | One all-privilege DB user for every service | 001 | **CLOSED** — least-privilege RBAC ([ADR-019](../adr/019-least-privilege-database-roles.md)): `pt_ingestion` / `pt_dbt` / `pt_bi_reader`. Security re-scored 2 → 4. |
+| HIGH-4 | No alerting on failure | 001 | **REDUCED** — failure sweeper + single-active-run added; alerting still open, re-classified MEDIUM (003-M1). |
 
 **Related:** [`docs/adr/`](../adr/README.md) (decisions) · [`docs/fix/fix_log.md`](../fix/fix_log.md) (bugs and their root causes) · [`docs/backlog.md`](../backlog.md) (deferred work) · [`docs/dw_readiness_review.md`](../dw_readiness_review.md) (the earlier internal advisory review)

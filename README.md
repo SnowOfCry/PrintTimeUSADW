@@ -370,6 +370,7 @@ The `docs/` tree is a first-class part of this project:
 
 | Area | Location |
 |---|---|
+| **Concept guides** (CDC · SCD · Governance & Audit) | [`docs/guides/`](docs/guides/) — [CDC](docs/guides/cdc.md) · [SCD](docs/guides/scd.md) · [Governance & Audit](docs/guides/governance-and-audit.md) |
 | **Architecture Decision Records** (001–019) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
 | **External audit reports** (2 independent DW reviews) | [`docs/audit/`](docs/audit/) |
 | **Fix log** (root causes + the rules they generalize to) | [`docs/fix/fix_log.md`](docs/fix/fix_log.md) |

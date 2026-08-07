@@ -71,3 +71,70 @@ jobs:
 
       - name: Validate docker-compose.yml syntax
         run: docker compose config --quiet
+
+  # ── dbt Build & Test (ephemeral Postgres) ─────────────────────────────────
+  # Closes audit finding AUDIT-003-H1: the business logic and all dbt data tests
+  # must be gated on every PR, not only when the DAG runs. Spins up a throwaway
+  # postgres:16, creates the extensions/schemas/source tables the models read
+  # from, then runs the full `dbt build` (silver + gold + every data test) on
+  # empty sources — which exercises compilation, `ref` resolution, model
+  # contracts, SCD2/fact logic, and all 168 tests. A broken model, a contract
+  # mismatch, or a failing test fails the PR here instead of after merge.
+  dbt-build:
+    name: dbt Build & Test
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: warehouse_user
+          POSTGRES_PASSWORD: ci_dbt_pw
+          POSTGRES_DB: printtime_dw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U warehouse_user -d printtime_dw"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DBT_HOST: localhost
+      DBT_PORT: "5432"
+      DBT_DATABASE: printtime_dw
+      DBT_SCHEMA: silver
+      DBT_USER: warehouse_user
+      DBT_PASSWORD: ci_dbt_pw
+      # psql picks these up so the DDL steps need no connection flags.
+      PGHOST: localhost
+      PGUSER: warehouse_user
+      PGPASSWORD: ci_dbt_pw
+      PGDATABASE: printtime_dw
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dbt (pinned to the project versions)
+        run: pip install dbt-core==1.8.7 dbt-postgres==1.8.2
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Create extensions, schemas, and source tables
+        run: |
+          psql -v ON_ERROR_STOP=1 -f docker/postgres/init/001_create_schemas.sql   # pgcrypto + bronze/silver/gold/audit schemas
+          psql -v ON_ERROR_STOP=1 -f sql/bronze/002_create_bronze_tables.sql        # the oltp_*/ref_* sources the models read
+          psql -v ON_ERROR_STOP=1 -f sql/bronze/003_create_bronze_indexes.sql
+          psql -v ON_ERROR_STOP=1 -f sql/audit/002_create_audit_tables.sql          # etl_batch_control (macro dependency)
+          psql -v ON_ERROR_STOP=1 -f sql/audit/003_create_audit_indexes.sql
+
+      - name: dbt build — silver + gold + all data tests (empty sources)
+        working-directory: dbt/printtime_dw
+        run: >-
+          dbt build --profiles-dir . --no-version-check
+          --vars '{silver_batch_id: 999, gold_batch_ids: {gold.dimensions: ci, gold.fact_retail_sales: ci, gold.fact_payments: ci, gold.fact_customer_behavior_snapshot: ci}}'

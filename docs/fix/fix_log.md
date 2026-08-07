@@ -11,6 +11,49 @@ non-obvious or the fix taught a reusable rule. Newest first.
 
 ---
 
+## FIX-017 — CI never ran dbt, so the model logic and 168 tests were ungated (closes AUDIT-003-H1)
+
+| | |
+|---|---|
+| **Found** | 2026-08-07, external audit 003 finding **AUDIT-003-H1** |
+| **Symptom** | CI ran ruff / mypy / pytest / `docker compose config` but **never compiled or tested dbt**. A PR could merge a model that fails to compile, breaks a contract, or breaks an SCD2 / reconciliation test, and CI stayed green — the 168 data tests only ran when the Airflow DAG ran, *after* merge. |
+| **Affected** | `.github/workflows/ci.yml` |
+| **Severity** | HIGH (process / regression risk) |
+
+### Cause
+
+The pipeline's entire value is in dbt, but the CI gate exercised only the Python EL and compose
+syntax. The data tests existed and passed locally; they simply weren't enforced at the gate where
+regressions enter.
+
+### Fix
+
+Added a `dbt-build` CI job: an ephemeral `postgres:16` service, then create the extensions +
+schemas + **source** tables the models read from (`docker/postgres/init/001` for pgcrypto +
+schemas, `sql/bronze/002-003`, `sql/audit/002-003`), then run the full `dbt build` on **empty
+sources** with the required batch vars:
+
+```
+--vars '{silver_batch_id: 999, gold_batch_ids: {gold.dimensions: ci, gold.fact_retail_sales: ci, gold.fact_payments: ci, gold.fact_customer_behavior_snapshot: ci}}'
+```
+
+Empty sources still exercise **compilation, `ref` resolution, model contracts, SCD2/fact SQL, and
+every one of the 168 tests** — the classes of regression a PR actually introduces. Data-dependent
+checks (reconciliation to the cent) remain covered by the DAG on real data. Validated against a
+throwaway DB before shipping: **`dbt build` → PASS=213, 0 errors** (168 tests + 45 models/views).
+
+Two gotchas the local validation caught (and the job now handles): the SCD2 dims need the
+**pgcrypto** extension (`digest()` for the SHA-256 `record_hash`), and silver/gold **raise** without
+the `silver_batch_id` / `gold_batch_ids` vars (MED-12 guard).
+
+### Class of mistake
+
+**A safety net that isn't wired to the gate.** Tests that only run post-merge (or only locally)
+don't prevent regressions — they document them after the fact. Coverage is only real where it can
+fail the merge.
+
+---
+
 ## FIX-016 — full-load hash-skip compared against a PARTIAL batch, re-stacking the snapshot
 
 | | |

@@ -22,8 +22,12 @@ in Docker.
   deduplication, and ADR-005 cleaning standards.
 - **Complete gold star schema — 14/14 objects.** 8 dimensions (6 SCD Type 2 with full version
   history), 3 facts, and 3 role-playing date views. Every fact reconciles to silver **to the
-  cent**, and the whole warehouse passes **159/159 dbt tests**.
-- **Design decided in the open** — 16 Architecture Decision Records ([`docs/adr/`](docs/adr/))
+  cent**, and the whole warehouse passes **168/168 dbt tests**.
+- **Least-privilege security** — three purpose-scoped database roles (ingestion / dbt / BI
+  reader) instead of a shared superuser ([ADR-019](docs/adr/019-least-privilege-database-roles.md)).
+- **Independently audited** — two external Data-Warehouse audits ([`docs/audit/`](docs/audit/))
+  with every HIGH and MEDIUM finding remediated and traced in the [fix log](docs/fix/fix_log.md).
+- **Design decided in the open** — 19 Architecture Decision Records ([`docs/adr/`](docs/adr/))
   capture every significant choice, its alternatives, and its consequences.
 - **Specification-first** — hand-written DDL specs, per-column data dictionaries, and
   source-to-target mappings are the source of truth; dbt honors them.
@@ -37,7 +41,8 @@ in Docker.
 | Ingestion (Extract + Load) | Python 3.11 (pandas, SQLAlchemy) |
 | Orchestration | Apache Airflow 2.9 |
 | Database GUI | pgAdmin 4 |
-| Code quality | ruff, mypy, pytest + 160+ dbt data tests (CI on every push) |
+| Security | Least-privilege PostgreSQL roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019) |
+| Code quality | ruff, mypy, pytest + 168 dbt data tests (CI on every push) |
 | Runtime | Docker + Docker Compose |
 
 ---
@@ -114,9 +119,11 @@ See [ADR-003: ELT over ETL](docs/adr/003-elt-over-etl.md) and
 | **Gold** (Kimball star schema, 14 objects) | ✅ **Complete** — 8 dims (6 SCD2) + 3 facts + 3 date views — released as `v0.2.0-gold` |
 | **Audit** (batch control + lineage) | ✅ In place |
 | **Orchestration** (Airflow DAG) | ✅ **Wired end-to-end** — bronze → silver → gold → tests, with real batch IDs; the fact loads are genuinely incremental |
-| **Governance** (16 ADRs, dictionaries, mappings, fix log) | ✅ Complete |
+| **Security** (least-privilege RBAC) | ✅ Three scoped roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019) |
+| **Governance** (19 ADRs, dictionaries, mappings, fix log) | ✅ Complete |
+| **External audits** (2 independent reviews) | ✅ All HIGH + MEDIUM findings remediated — see [`docs/audit/`](docs/audit/) + [fix log](docs/fix/fix_log.md) |
 
-**Warehouse-wide: `dbt build --select silver gold` passes 159/159** (34 models + 125 tests).
+**Warehouse-wide: `dbt build --select silver gold` passes all 168 dbt tests.**
 The facts reconcile exactly to silver — retail sales, payments, and customer lifetime value all
 match to the cent, with zero unresolved dimension keys. See the
 [gold star schema](docs/architecture/gold_star_schema.md) for the dimensional model.
@@ -207,11 +214,13 @@ reach Postgres at `postgres:5432`; from your host, use `localhost:5433`.
 
 | Service | URL | Default credential (from `.env.example`) |
 |---|---|---|
-| pgAdmin | http://localhost:5050 | `admin@printtime.local` / `changeme_pgadmin` |
+| pgAdmin | http://localhost:5050 | `admin@printtime.com` / `changeme_pgadmin` |
 | Airflow | http://localhost:8080 | `admin` / `changeme_admin` |
 | PostgreSQL | `localhost:5433` | `warehouse_user` / `changeme_warehouse` |
 
 > These are development defaults. **Change every password before using real data.**
+> `PGADMIN_EMAIL` must be a real email format (a `.local`/internal domain is rejected by
+> pgAdmin's login validator).
 
 **Connect pgAdmin to Postgres:** Servers → Register → Server → Connection tab →
 Host `postgres`, Port `5432` (in-network), DB `printtime_dw`, user/password from `.env`.
@@ -361,7 +370,8 @@ The `docs/` tree is a first-class part of this project:
 
 | Area | Location |
 |---|---|
-| **Architecture Decision Records** (001–016) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Architecture Decision Records** (001–019) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **External audit reports** (2 independent DW reviews) | [`docs/audit/`](docs/audit/) |
 | **Fix log** (root causes + the rules they generalize to) | [`docs/fix/fix_log.md`](docs/fix/fix_log.md) |
 | **Gold star schema** (ER diagram + querying guide) | [`docs/architecture/gold_star_schema.md`](docs/architecture/gold_star_schema.md) |
 | **BI layer** (Power BI DAX measures + build guide) | [`docs/bi/`](docs/bi/) — serving views in `models/gold/bi/` |
@@ -395,10 +405,12 @@ contracts.
 - [x] Silver layer — 20 contract-enforced incremental-merge models (`v0.1.0-silver`)
 - [x] dbt data tests — 75 silver tests (`unique` / `not_null` / `accepted_values` / `relationships`) + source freshness SLA
 - [x] Gold layer — 8 dims (6 SCD2) + 3 facts + 3 date views, 64 tests (`v0.2.0-gold`)
-- [x] Governance — 16 ADRs, data dictionaries, mappings, load strategies, fix log
+- [x] Governance — 19 ADRs, data dictionaries, mappings, load strategies, fix log
 - [x] Wire the full pipeline end-to-end in Airflow with real batch IDs — incremental fact loads active
 - [x] DRY the shared silver lineage/metadata block into a reusable macro (`silver_lineage_and_metadata`)
 - [x] BI serving layer — star-native `gold.bi_*` views + Power BI DAX/build guide (ADR-017)
+- [x] Least-privilege database roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019)
+- [x] Two external DW audits remediated — all HIGH + MEDIUM findings closed (`docs/audit/`, `docs/fix/`)
 - [ ] Tableau version of the dashboards (same serving views — for the managers to compare)
 
 ---

@@ -31,6 +31,13 @@ models:
       - name: customer_key
         data_tests: [unique, not_null]
 
+  - name: bi_dim_customer_contact
+    description: "MASKED customer contact (email/phone) for BI (AUDIT-003-M3). Reads silver by design — raw PII is never placed in gold — but exposes only masked values; owned by pt_dbt so the BI role selecting it never receives the raw columns. Governance: ADR-013."
+    columns:
+      - name: customer_id
+        description: Business key; one row per current customer.
+        data_tests: [unique, not_null]
+
   - name: bi_dim_store
     description: "Store/location dimension (SCD2). store_state is the full state name."
     columns:

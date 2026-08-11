@@ -75,6 +75,24 @@ Decisions live in ADRs; every layer has a data dictionary; every hop has a mappi
 - The PII register (tagged dictionaries) and access grants must be maintained as the model evolves — an ownership duty (belongs in the runbook, backlog #8).
 - No automated PII discovery — classification is manual; acceptable for a single, well-understood source.
 
+## Update (2026-08-11) — masked-access implemented (AUDIT-003-M3)
+
+Audit 003 flagged PII masking as MEDIUM, phrased as "the BI reader role can read raw PII." On
+re-verification that phrasing was **overstated**: `email`/`phone` exist only in **bronze and
+silver**, gold carries none (ADR-011), and `pt_bi_reader` has **no USAGE on silver/bronze** — so the
+RBAC + layer boundary already confine raw PII away from BI (verified: reading `silver.customer` as
+`pt_bi_reader` returns `permission denied for schema silver`).
+
+What was genuinely missing — a **sanctioned masked-access path** — is now implemented:
+`gold.bi_dim_customer_contact` exposes `email_masked` (`a***@domain`) and `phone_masked`
+(`***-***-1234`). It reads silver by design (raw PII is never placed in gold) but is **owned by
+`pt_dbt`**, so a BI role selecting it runs with the owner's rights and receives only the masks —
+never the raw columns. Verified: `pt_bi_reader` sees `a***@example.com` / `***-***-5389` and remains
+denied raw silver.
+
+**Still open:** PII **retention / right-to-erasure** enforcement (backlog #4) — identification and
+masked access are done; a deletion/retention workflow is not.
+
 ## Related
 
 - ADR-002 (on-prem posture — why risk is lower), ADR-004 (bronze immutability — the deletion tension), ADR-011 (Gold carries no email/phone)

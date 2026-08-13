@@ -27,7 +27,6 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
 
 import pandas as pd
 
@@ -52,9 +51,9 @@ DEFAULT_SERIES: dict[str, dict[str, str]] = {
 class FREDExtractor:
     """Pull observations for a set of FRED series into one raw DataFrame."""
 
-    REQUEST_TIMEOUT = 30          # seconds
+    REQUEST_TIMEOUT = 30  # seconds
     MAX_RETRIES = 3
-    RETRY_BACKOFF = 2.0           # seconds, multiplied by attempt number
+    RETRY_BACKOFF = 2.0  # seconds, multiplied by attempt number
 
     def __init__(
         self,
@@ -62,12 +61,13 @@ class FREDExtractor:
         api_key: str | None = None,
     ) -> None:
         self.series = series or DEFAULT_SERIES
-        self.api_key = api_key or os.environ.get("FRED_API_KEY")
-        if not self.api_key:
+        key = api_key or os.environ.get("FRED_API_KEY")
+        if not key:
             raise ValueError(
                 "FRED_API_KEY is not set. Get a free key at "
                 "https://fredaccount.stlouisfed.org/apikeys and put it in .env."
             )
+        self.api_key: str = key
 
     # -- public ------------------------------------------------------------
     def extract(self, observation_start: str | None = None) -> pd.DataFrame:
@@ -79,12 +79,16 @@ class FREDExtractor:
             'YYYY-MM-DD'. Only observations on/after this date are pulled
             (incremental). None => full history.
         """
-        frames = [self._extract_series(sid, meta, observation_start)
-                  for sid, meta in self.series.items()]
+        frames = [
+            self._extract_series(sid, meta, observation_start)
+            for sid, meta in self.series.items()
+        ]
         df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         logger.info(
             "FRED extract complete | series=%d rows=%d start=%s",
-            len(self.series), len(df), observation_start or "(all)",
+            len(self.series),
+            len(df),
+            observation_start or "(all)",
         )
         return df
 
@@ -106,16 +110,18 @@ class FREDExtractor:
             raw = obs.get("value", ".")
             # FRED encodes "missing" as "." — keep the row, NULL the value.
             value = None if raw in (".", "", None) else float(raw)
-            rows.append({
-                "series_id": series_id,
-                "observation_date": obs.get("date"),
-                "indicator_value": value,
-                "units": meta.get("units"),
-                # Business timestamps for the loader + watermark: the observation
-                # date is the source's own "as-of" instant for this row.
-                "created_at": obs.get("date"),
-                "updated_at": obs.get("date"),
-            })
+            rows.append(
+                {
+                    "series_id": series_id,
+                    "observation_date": obs.get("date"),
+                    "indicator_value": value,
+                    "units": meta.get("units"),
+                    # Business timestamps for the loader + watermark: the observation
+                    # date is the source's own "as-of" instant for this row.
+                    "created_at": obs.get("date"),
+                    "updated_at": obs.get("date"),
+                }
+            )
         df = pd.DataFrame(rows)
         if not df.empty:
             df["observation_date"] = pd.to_datetime(df["observation_date"]).dt.date
@@ -130,22 +136,22 @@ class FREDExtractor:
         last_err: Exception | None = None
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
-                with urllib.request.urlopen(url, timeout=self.REQUEST_TIMEOUT) as resp:  # noqa: S310
+                with urllib.request.urlopen(url, timeout=self.REQUEST_TIMEOUT) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
                 last_err = exc
                 wait = self.RETRY_BACKOFF * attempt
                 logger.warning(
                     "FRED request failed (series=%s attempt=%d/%d): %s — retrying in %.0fs",
-                    series_id, attempt, self.MAX_RETRIES, exc, wait,
+                    series_id,
+                    attempt,
+                    self.MAX_RETRIES,
+                    exc,
+                    wait,
                 )
                 if attempt < self.MAX_RETRIES:
                     time.sleep(wait)
-        raise RuntimeError(f"FRED request failed for {series_id} after "
-                           f"{self.MAX_RETRIES} attempts: {last_err}")
-
-
-def _redacted(msg: str) -> str:
-    """Never let the API key reach a log line."""
-    key = os.environ.get("FRED_API_KEY", "")
-    return msg.replace(key, "***") if key else msg
+        raise RuntimeError(
+            f"FRED request failed for {series_id} after "
+            f"{self.MAX_RETRIES} attempts: {last_err}"
+        )

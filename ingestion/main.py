@@ -163,6 +163,74 @@ def run(pipeline_name: str, table_name: str, strategy: str) -> None:
     )
 
 
+def run_fred_ingest(pipeline_name: str = "printtime_elt_pipeline") -> None:
+    """Extract FRED macro series (CPI, PPI) and append them to bronze.econ_indicator.
+
+    The API counterpart of `run()`: opens one batch, reads the last watermark
+    (the max observation date already loaded), pulls only newer observations
+    (FRED revises history, so it re-pulls from the watermark and lets the silver
+    hash-gate absorb unchanged rows), appends via BronzeLoader, and advances the
+    watermark only on success.
+    """
+    from sqlalchemy import text
+
+    from ingestion.extract.fred_extractor import FREDExtractor
+    from ingestion.load.bronze_loader import BronzeLoader
+    from ingestion.utils.batch_control import complete_batch, fail_batch, start_batch
+    from ingestion.utils.database import get_dw_engine
+
+    target_table = "econ_indicator"
+    engine = get_dw_engine()
+
+    batch_key, batch_id = start_batch(
+        pipeline_name=pipeline_name,
+        source_system="api",
+        target_table=target_table,
+        load_type="incremental_append",
+        watermark_column="updated_at_source_timestamp",
+        engine=engine,
+    )
+    try:
+        # Last observation date already loaded (None => full history).
+        with engine.connect() as conn:
+            wm = conn.execute(text(
+                "SELECT max(watermark_value_end) FROM audit.etl_batch_control "
+                "WHERE target_table = :t AND batch_status = 'succeeded'"
+            ), {"t": target_table}).scalar()
+        observation_start = str(wm)[:10] if wm else None
+
+        df = FREDExtractor().extract(observation_start=observation_start)
+
+        watermark_value_end: str | None = None
+        if not df.empty and "updated_at" in df.columns:
+            max_wm = df["updated_at"].max()
+            watermark_value_end = None if pd.isna(max_wm) else str(max_wm)
+
+        loader = BronzeLoader(
+            pipeline_name=pipeline_name,
+            target_table=target_table,
+            source_table_name="fred",
+            source_system="api",
+            batch_id=batch_key,
+            dw_engine=engine,
+        )
+        rows_loaded = loader.load_dataframe_to_bronze(
+            df=df, strategy="incremental", batch_id=batch_key
+        )
+        complete_batch(
+            batch_key=batch_key,
+            rows_extracted=len(df),
+            rows_inserted=rows_loaded,
+            watermark_value_end=watermark_value_end,
+            engine=engine,
+        )
+    except Exception as exc:
+        fail_batch(batch_key, str(exc), engine=engine)
+        raise
+
+    logger.info("FRED ingest complete | batch=%s rows=%d", batch_id, len(df))
+
+
 def main() -> None:
     args = parse_args()
     try:

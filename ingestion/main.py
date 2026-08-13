@@ -18,8 +18,8 @@ import sys
 
 import pandas as pd
 
-from ingestion.utils.logger import get_logger
 from ingestion.utils.config_loader import load_config
+from ingestion.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -193,10 +193,13 @@ def run_fred_ingest(pipeline_name: str = "printtime_elt_pipeline") -> None:
     try:
         # Last observation date already loaded (None => full history).
         with engine.connect() as conn:
-            wm = conn.execute(text(
-                "SELECT max(watermark_value_end) FROM audit.etl_batch_control "
-                "WHERE target_table = :t AND batch_status = 'succeeded'"
-            ), {"t": target_table}).scalar()
+            wm = conn.execute(
+                text(
+                    "SELECT max(watermark_value_end) FROM audit.etl_batch_control "
+                    "WHERE target_table = :t AND batch_status = 'succeeded'"
+                ),
+                {"t": target_table},
+            ).scalar()
         observation_start = str(wm)[:10] if wm else None
 
         df = FREDExtractor().extract(observation_start=observation_start)

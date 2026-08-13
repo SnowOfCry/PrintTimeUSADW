@@ -31,6 +31,13 @@ models:
       - name: customer_key
         data_tests: [unique, not_null]
 
+  - name: bi_dim_customer_contact
+    description: "MASKED customer contact (email/phone) for BI (AUDIT-003-M3). Reads silver by design — raw PII is never placed in gold — but exposes only masked values; owned by pt_dbt so the BI role selecting it never receives the raw columns. Governance: ADR-013."
+    columns:
+      - name: customer_id
+        description: Business key; one row per current customer.
+        data_tests: [unique, not_null]
+
   - name: bi_dim_store
     description: "Store/location dimension (SCD2). store_state is the full state name."
     columns:
@@ -102,3 +109,16 @@ models:
         data_tests:
           - not_null
           - relationships: {to: ref('bi_dim_customer'), field: customer_key}
+
+  - name: bi_revenue_real
+    description: "Nominal vs. real (CPI-deflated) monthly revenue (ADR-020). Real revenue is in latest-CPI-month dollars. Reads silver.econ_indicator (pt_dbt-owned) + gold facts."
+    columns:
+      - name: month_key
+        description: YYYYMM. One row per revenue month.
+        data_tests: [unique, not_null]
+
+  - name: bi_margin_vs_paper_cost
+    description: "Monthly gross margin vs. the pulp/paper PPI (WPU0911), for input-cost pressure analysis (ADR-020)."
+    columns:
+      - name: month_key
+        data_tests: [unique, not_null]

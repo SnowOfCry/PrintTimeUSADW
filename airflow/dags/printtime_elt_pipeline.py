@@ -40,6 +40,8 @@ vars set in docker-compose. The dedicated dbt service remains for ad-hoc use.
 from __future__ import annotations
 
 import json
+import os
+import urllib.request
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -47,6 +49,62 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+
+PIPELINE_NAME = "printtime_elt_pipeline"
+
+
+# ---------------------------------------------------------------------------
+# Failure alerting (AUDIT-003-M1)
+# ---------------------------------------------------------------------------
+def alert_on_failure(context: dict) -> None:
+    """Fire on ANY task failure so a broken run is never silent.
+
+    Always emits a structured ALERT log line (visible in the scheduler logs and
+    testable without any external channel), then pushes the same message to a
+    channel if one is configured: Slack (`ALERT_SLACK_WEBHOOK`) or email
+    (`ALERT_EMAIL`, via Airflow's SMTP). Best-effort by design — a broken alert
+    channel must never raise and mask or worsen the original task failure, so
+    every side effect is wrapped and swallowed.
+    """
+    ti = context.get("task_instance")
+    dag_id = getattr(ti, "dag_id", PIPELINE_NAME)
+    task_id = getattr(ti, "task_id", "unknown")
+    run_id = context.get("run_id", "unknown")
+    exc = context.get("exception")
+    log_url = getattr(ti, "log_url", "")
+    msg = (f"[ALERT] {dag_id} FAILED — task={task_id} run={run_id} "
+           f"error={exc} log={log_url}")
+
+    # 1) Always log it — the one path that works with zero configuration.
+    try:
+        from ingestion.utils.logger import get_logger
+        get_logger(__name__).error(msg)
+    except Exception:
+        print(msg)
+
+    # 2) Slack webhook, if configured (stdlib only — no extra dependency).
+    webhook = os.environ.get("ALERT_SLACK_WEBHOOK")
+    if webhook:
+        try:
+            req = urllib.request.Request(
+                webhook,
+                data=json.dumps({"text": msg}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=10)  # noqa: S310 (operator-configured URL)
+            return
+        except Exception:
+            pass
+
+    # 3) Email, if configured (requires Airflow SMTP to be set up).
+    to = os.environ.get("ALERT_EMAIL")
+    if to:
+        try:
+            from airflow.utils.email import send_email
+            send_email(to=[to], subject=f"[ALERT] {dag_id} failed", html_content=msg)
+        except Exception:
+            pass
+
 
 # ---------------------------------------------------------------------------
 # Default arguments applied to every task in this DAG.
@@ -58,12 +116,13 @@ DEFAULT_ARGS = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
+    # AUDIT-003-M1: notify on failure instead of failing silently.
+    "on_failure_callback": alert_on_failure,
 }
 
 # ---------------------------------------------------------------------------
 # Pipeline-level constants
 # ---------------------------------------------------------------------------
-PIPELINE_NAME = "printtime_elt_pipeline"
 DBT_PROJECT_DIR = "/dbt/printtime_dw"          # mounted volume (same path as the dbt service)
 # dbt's artifacts land in the airflow-local dir set by DBT_TARGET_PATH in
 # docker-compose (the mounted project's target/ isn't writable by airflow,
@@ -137,6 +196,18 @@ def _ingest_oltp_to_bronze(**context: dict) -> None:
             table_name=table["name"],
             strategy=table.get("load_strategy", default_strategy),
         )
+
+
+def _ingest_fred_to_bronze(**context: dict) -> None:
+    """Extract FRED macro series (CPI, PPI) into bronze.econ_indicator.
+
+    Independent API source: it opens/completes its own batch in
+    audit.etl_batch_control, so it runs in parallel with the OLTP ingest and
+    both must finish before silver builds.
+    """
+    from ingestion.main import run_fred_ingest
+
+    run_fred_ingest(pipeline_name=PIPELINE_NAME)
 
 
 def _start_silver_batch(**context: dict) -> int:
@@ -281,6 +352,12 @@ with DAG(
         doc_md="Extracts every configured OLTP table into bronze. Logs one batch per table.",
     )
 
+    ingest_fred_to_bronze = PythonOperator(
+        task_id="ingest_fred_to_bronze",
+        python_callable=_ingest_fred_to_bronze,
+        doc_md="Extracts FRED macro series (CPI, PPI) into bronze.econ_indicator (API source).",
+    )
+
     # ── 2. Silver: open batch → dbt run (with the real batch id) → complete ──
     start_silver_batch = PythonOperator(
         task_id="start_silver_batch",
@@ -389,6 +466,10 @@ with DAG(
     for upstream, downstream in zip(main_chain, main_chain[1:]):
         upstream >> downstream
     main_chain[-1] >> end_pipeline
+
+    # FRED bronze load runs in parallel with the OLTP ingest; silver waits for both.
+    start_pipeline >> ingest_fred_to_bronze >> start_silver_batch
+    ingest_fred_to_bronze >> fail_open_batches
 
     # The sweeper watches every batch-holding step; ONE_FAILED means it is
     # skipped on a clean run and fires as soon as any of these fails.

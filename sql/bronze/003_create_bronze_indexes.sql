@@ -149,3 +149,7 @@ CREATE INDEX IF NOT EXISTS idx_ref_payment_status_bronze_batch_id ON bronze.ref_
 CREATE INDEX IF NOT EXISTS idx_ref_payment_status_bronze_loaded_at_timestamp ON bronze.ref_payment_status (bronze_loaded_at_timestamp);
 CREATE INDEX IF NOT EXISTS idx_ref_payment_status_bronze_row_hash ON bronze.ref_payment_status (bronze_row_hash);
 CREATE INDEX IF NOT EXISTS idx_ref_payment_status_updated_at_source_timestamp ON bronze.ref_payment_status (updated_at_source_timestamp);
+
+-- econ_indicator: lookups by series + date (silver dedup, watermark scans)
+CREATE INDEX IF NOT EXISTS ix_bronze_econ_indicator_series_date
+    ON bronze.econ_indicator (series_id, observation_date);

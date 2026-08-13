@@ -27,7 +27,10 @@ in Docker.
   reader) instead of a shared superuser ([ADR-019](docs/adr/019-least-privilege-database-roles.md)).
 - **Independently audited** — two external Data-Warehouse audits ([`docs/audit/`](docs/audit/))
   with every HIGH and MEDIUM finding remediated and traced in the [fix log](docs/fix/fix_log.md).
-- **Design decided in the open** — 19 Architecture Decision Records ([`docs/adr/`](docs/adr/))
+- **API ingestion** — beyond the OLTP source, an HTTP **FRED** (Federal Reserve) source lands
+  CPI/PPI into bronze (secrets, retry, incremental), powering nominal-vs-**real** revenue and
+  margin-vs-input-cost analyses ([ADR-020](docs/adr/020-external-fred-macro-source.md)).
+- **Design decided in the open** — 20 Architecture Decision Records ([`docs/adr/`](docs/adr/))
   capture every significant choice, its alternatives, and its consequences.
 - **Specification-first** — hand-written DDL specs, per-column data dictionaries, and
   source-to-target mappings are the source of truth; dbt honors them.
@@ -371,7 +374,7 @@ The `docs/` tree is a first-class part of this project:
 | Area | Location |
 |---|---|
 | **Concept guides** (CDC · SCD · Governance & Audit) | [`docs/guides/`](docs/guides/) — [CDC](docs/guides/cdc.md) · [SCD](docs/guides/scd.md) · [Governance & Audit](docs/guides/governance-and-audit.md) |
-| **Architecture Decision Records** (001–019) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
+| **Architecture Decision Records** (001–020) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
 | **External audit reports** (2 independent DW reviews) | [`docs/audit/`](docs/audit/) |
 | **Fix log** (root causes + the rules they generalize to) | [`docs/fix/fix_log.md`](docs/fix/fix_log.md) |
 | **Gold star schema** (ER diagram + querying guide) | [`docs/architecture/gold_star_schema.md`](docs/architecture/gold_star_schema.md) |
@@ -413,6 +416,7 @@ broken model or failing test fails the PR before merge (not after).
 - [x] BI serving layer — star-native `gold.bi_*` views + Power BI DAX/build guide (ADR-017)
 - [x] Least-privilege database roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019)
 - [x] Two external DW audits remediated — all HIGH + MEDIUM findings closed (`docs/audit/`, `docs/fix/`)
+- [x] API source — FRED macro indicators (CPI, PPI) → real-terms revenue + margin-vs-cost (ADR-020)
 - [ ] Tableau version of the dashboards (same serving views — for the managers to compare)
 
 ---

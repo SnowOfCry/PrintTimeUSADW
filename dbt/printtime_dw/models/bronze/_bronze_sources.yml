@@ -136,6 +136,13 @@ sources:
       
       - name: oltp_invoice
         description: "Raw invoice records from the OLTP source (append-only)."
+
+      # ── External API source: FRED macroeconomic series ──────────────
+      - name: econ_indicator
+        description: "External macro series (CPI, PPI) from the FRED API. Monthly cadence — freshness SLA widened to match (FRED publishes with a lag)."
+        freshness:
+          warn_after:  {count: 35, period: day}
+          error_after: {count: 45, period: day}
             
               
 

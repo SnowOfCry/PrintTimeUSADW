@@ -29,6 +29,7 @@ PrintTimeUSA Data Warehouse. Each ADR captures one significant decision — its 
 | [017](017-bi-tool-power-bi-then-tableau.md) | Power BI as the BI tool on a tool-agnostic serving layer; Tableau version to follow for the managers to decide | Accepted | Erick Palma |
 | [018](018-disaster-recovery-and-backup.md) | Disaster recovery — tested logical backup/restore, backed by medallion reproducibility (closes audit HIGH-5) | Accepted | Erick Palma |
 | [019](019-least-privilege-database-roles.md) | Least-privilege database roles (RBAC) — split the superuser into pt_ingestion / pt_dbt / pt_bi_reader (implements ADR-013 §3, closes audit HIGH-6) | Accepted | Erick Palma |
+| [020](020-external-fred-macro-source.md) | External macroeconomic source (FRED API) — first API source; CPI/PPI for real-terms revenue + input-cost analysis | Accepted | Erick Palma |
 
 ## Reading order
 

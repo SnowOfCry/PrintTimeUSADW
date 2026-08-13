@@ -1914,3 +1914,58 @@ models:
         data_type: text
         constraints:
           - type: not_null
+
+  - name: econ_indicator
+    description: "Clean macroeconomic series (CPI, PPI) from the FRED API (ADR-020). Grain: one row per (series_id, observation_date). Feeds gold real-terms revenue and input-cost analysis."
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: silver_series_id
+        data_type: varchar(50)
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+      - name: silver_observation_date
+        data_type: date
+        constraints:
+          - type: not_null
+        data_tests: [not_null]
+      - name: silver_indicator_value
+        data_type: numeric(18,6)
+      - name: silver_units
+        data_type: varchar(50)
+      - name: silver_source_system
+        data_type: varchar(100)
+        constraints:
+          - type: not_null
+      - name: silver_source_table_name
+        data_type: varchar(150)
+      - name: silver_source_record_id
+        data_type: text
+      - name: silver_source_created_at_timestamp
+        data_type: timestamp
+      - name: silver_source_updated_at_timestamp
+        data_type: timestamp
+      - name: silver_bronze_record_id
+        data_type: bigint
+      - name: silver_bronze_batch_id
+        data_type: bigint
+      - name: silver_batch_id
+        data_type: bigint
+        constraints:
+          - type: not_null
+      - name: silver_created_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+      - name: silver_updated_at_timestamp
+        data_type: timestamp
+        constraints:
+          - type: not_null
+      - name: silver_is_deleted_flag
+        data_type: boolean
+        constraints:
+          - type: not_null
+      - name: silver_row_hash
+        data_type: text

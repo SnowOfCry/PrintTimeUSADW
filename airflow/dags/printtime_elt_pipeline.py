@@ -198,6 +198,18 @@ def _ingest_oltp_to_bronze(**context: dict) -> None:
         )
 
 
+def _ingest_fred_to_bronze(**context: dict) -> None:
+    """Extract FRED macro series (CPI, PPI) into bronze.econ_indicator.
+
+    Independent API source: it opens/completes its own batch in
+    audit.etl_batch_control, so it runs in parallel with the OLTP ingest and
+    both must finish before silver builds.
+    """
+    from ingestion.main import run_fred_ingest
+
+    run_fred_ingest(pipeline_name=PIPELINE_NAME)
+
+
 def _start_silver_batch(**context: dict) -> int:
     """Open one 'running' batch for the silver dbt run and return its key.
 
@@ -340,6 +352,12 @@ with DAG(
         doc_md="Extracts every configured OLTP table into bronze. Logs one batch per table.",
     )
 
+    ingest_fred_to_bronze = PythonOperator(
+        task_id="ingest_fred_to_bronze",
+        python_callable=_ingest_fred_to_bronze,
+        doc_md="Extracts FRED macro series (CPI, PPI) into bronze.econ_indicator (API source).",
+    )
+
     # ── 2. Silver: open batch → dbt run (with the real batch id) → complete ──
     start_silver_batch = PythonOperator(
         task_id="start_silver_batch",
@@ -448,6 +466,10 @@ with DAG(
     for upstream, downstream in zip(main_chain, main_chain[1:]):
         upstream >> downstream
     main_chain[-1] >> end_pipeline
+
+    # FRED bronze load runs in parallel with the OLTP ingest; silver waits for both.
+    start_pipeline >> ingest_fred_to_bronze >> start_silver_batch
+    ingest_fred_to_bronze >> fail_open_batches
 
     # The sweeper watches every batch-holding step; ONE_FAILED means it is
     # skipped on a clean run and fires as soon as any of these fails.

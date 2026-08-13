@@ -42,6 +42,9 @@ x-airflow-common: &airflow-common
     # a structured ALERT line; set one to also push to Slack / email.
     ALERT_SLACK_WEBHOOK: ${ALERT_SLACK_WEBHOOK:-}
     ALERT_EMAIL: ${ALERT_EMAIL:-}
+    # FRED API key for the macro-indicator source (free key). Optional at boot;
+    # the FRED task fails loud with a clear message if it is unset.
+    FRED_API_KEY: ${FRED_API_KEY:-}
     # dbt connection (profiles.yml reads these) — dbt-core is installed in the
     # Airflow image (Option A, same pinned versions as docker/dbt) so the DAG's
     # BashOperator tasks can run dbt against the mounted project below.

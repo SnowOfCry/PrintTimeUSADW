@@ -768,3 +768,33 @@ COMMENT ON TABLE bronze.ref_payment_status IS 'Reference payment status lookup. 
 COMMENT ON COLUMN bronze.ref_payment_status.bronze_record_id IS 'Technical surrogate PK. Append-only; source id may repeat across batches.';
 COMMENT ON COLUMN bronze.ref_payment_status.bronze_row_hash IS 'Hash of business columns; used to detect changed source rows between batches.';
 COMMENT ON COLUMN bronze.ref_payment_status.bronze_batch_id IS 'ETL batch id; joins to audit.etl_batch_control (batch_key).';
+
+-- ---------------------------------------------------------------------------
+-- bronze.econ_indicator — external macroeconomic time series (FRED API).
+-- The warehouse's first API source. Grain: one row per (series, date) per batch
+-- (append-only, ADR-004). Business columns: series_id, observation_date,
+-- indicator_value, units. Feeds real-terms revenue + input-cost analysis.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS bronze.econ_indicator (
+    bronze_record_id BIGSERIAL,
+    series_id VARCHAR(50) NOT NULL,
+    observation_date DATE NOT NULL,
+    indicator_value NUMERIC(18,6) NULL,
+    units VARCHAR(50) NULL,
+    created_at_source_timestamp TIMESTAMP NULL,
+    updated_at_source_timestamp TIMESTAMP NULL,
+    bronze_batch_id BIGINT NOT NULL,
+    bronze_loaded_at_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    bronze_extracted_at_timestamp TIMESTAMP NULL,
+    bronze_source_system VARCHAR(100) NOT NULL,
+    bronze_source_table_name VARCHAR(150) NULL,
+    bronze_source_file_name VARCHAR(255) NULL,
+    bronze_source_row_number BIGINT NULL,
+    bronze_row_hash TEXT NOT NULL,
+    bronze_is_deleted_flag BOOLEAN NOT NULL DEFAULT FALSE,
+    bronze_raw_payload_jsonb JSONB NULL,
+    CONSTRAINT pk_econ_indicator PRIMARY KEY (bronze_record_id)
+);
+COMMENT ON TABLE bronze.econ_indicator IS 'External macroeconomic series from the FRED API (CPI, PPI). Append-only; watermark on updated_at_source_timestamp (= observation_date).';
+COMMENT ON COLUMN bronze.econ_indicator.indicator_value IS 'Observation value; NULL where FRED reported "." (missing).';
+COMMENT ON COLUMN bronze.econ_indicator.bronze_row_hash IS 'Hash of business columns; detects changed/revised observations between batches.';

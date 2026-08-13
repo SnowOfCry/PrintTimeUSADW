@@ -109,3 +109,16 @@ models:
         data_tests:
           - not_null
           - relationships: {to: ref('bi_dim_customer'), field: customer_key}
+
+  - name: bi_revenue_real
+    description: "Nominal vs. real (CPI-deflated) monthly revenue (ADR-020). Real revenue is in latest-CPI-month dollars. Reads silver.econ_indicator (pt_dbt-owned) + gold facts."
+    columns:
+      - name: month_key
+        description: YYYYMM. One row per revenue month.
+        data_tests: [unique, not_null]
+
+  - name: bi_margin_vs_paper_cost
+    description: "Monthly gross margin vs. the pulp/paper PPI (WPU0911), for input-cost pressure analysis (ADR-020)."
+    columns:
+      - name: month_key
+        data_tests: [unique, not_null]

@@ -636,3 +636,30 @@ Tables: 20
 | silver_row_hash | TEXT | NOT NULL | Hash of standardized business columns; drives merge change detection. | ETL / lineage | carried from Bronze / set by load | - |
 | silver_is_deleted_flag | BOOLEAN | NOT NULL | Logical delete carried/standardized from the source. | ETL / lineage | carried from Bronze / set by load | - |
 
+
+## silver.econ_indicator
+
+- **Source Bronze:** bronze.econ_indicator (FRED API, ADR-020)
+- **Business key:** (silver_series_id, silver_observation_date)
+- **Load strategy:** incremental_merge (hash-gated)
+- **Incremental filter:** bronze_batch_id > :last_successful_bronze_batch_id
+- **Supports Gold:** gold.bi_revenue_real, gold.bi_margin_vs_paper_cost
+
+| Column | Data Type | Nullable | Description | Source / Origin | Cleaning / Transformation | Example |
+|---|---|---|---|---|---|---|
+| silver_series_id | VARCHAR(50) | NOT NULL | FRED series id (business key part 1). | bronze.econ_indicator.series_id | trim; upper; required | CPIAUCSL |
+| silver_observation_date | DATE | NOT NULL | Observation date (business key part 2). | bronze.econ_indicator.observation_date | cast to date | 2026-07-01 |
+| silver_indicator_value | NUMERIC(18,6) | NULL | Observed index value; NULL where FRED reported "." | bronze.econ_indicator.indicator_value | cast; NULL preserved | 332.813000 |
+| silver_units | VARCHAR(50) | NULL | Units label. | bronze.econ_indicator.units | trim; '' -> NULL | index_1982_84 |
+| silver_source_system | VARCHAR(100) | NOT NULL | Originating source system (carried from Bronze). | ETL / lineage | carried from Bronze | api |
+| silver_source_table_name | VARCHAR(150) | NULL | Logical source name. | ETL / lineage | carried from Bronze | fred |
+| silver_source_record_id | TEXT | NULL | Lineage id (series-date). | ETL / lineage | series_id || '-' || date | CPIAUCSL-2026-07-01 |
+| silver_source_created_at_timestamp | TIMESTAMP | NULL | Source creation time (= observation date). | ETL / lineage | carried from Bronze | 2026-07-01 00:00:00 |
+| silver_source_updated_at_timestamp | TIMESTAMP | NULL | Source update time (= observation date); freshness for dedup. | ETL / lineage | carried from Bronze | 2026-07-01 00:00:00 |
+| silver_bronze_record_id | BIGINT | NULL | Bronze row that produced this Silver row. | ETL / lineage | carried from Bronze | 5001 |
+| silver_bronze_batch_id | BIGINT | NULL | Bronze batch that produced the winning row. | ETL / lineage | carried from Bronze | 126 |
+| silver_batch_id | BIGINT | NOT NULL | Silver ETL batch that created/updated this row. | ETL / lineage | set by load | 210 |
+| silver_created_at_timestamp | TIMESTAMP | NOT NULL | When this Silver row was first created. | ETL / lineage | set by load | 2026-08-13 22:45:03 |
+| silver_updated_at_timestamp | TIMESTAMP | NOT NULL | When this Silver row was last updated. | ETL / lineage | set by load | 2026-08-13 22:45:03 |
+| silver_is_deleted_flag | BOOLEAN | NOT NULL | Soft-delete flag (unused). | ETL / lineage | default false | false |
+| silver_row_hash | TEXT | NULL | Change-detection hash over standardized business columns. | ETL / lineage | md5(series,date,value,units) | 9f8e… |

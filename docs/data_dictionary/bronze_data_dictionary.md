@@ -704,3 +704,27 @@ Tables: 20
 | bronze_is_deleted_flag | BOOLEAN | NOT NULL | Marks a row that the source reports as deleted (soft-delete capture); does not remove the Bronze row. | ETL metadata (DEFAULT FALSE) | false |
 | bronze_raw_payload_jsonb | JSONB | NULL | Full raw source row stored as JSONB for complete traceability back to the exact extracted record. | ETL metadata | {"invoice_id": 1001, ...} |
 
+
+## bronze.econ_indicator
+
+External macroeconomic series (CPI, PPI) from the **FRED API** (ADR-020) — the warehouse's first API source. Append-only; grain: one row per (series_id, observation_date) per batch.
+
+| Column | Data Type | Nullable | Description | Source / Origin | Example |
+|---|---|---|---|---|---|
+| bronze_record_id | BIGSERIAL | NOT NULL | Technical surrogate primary key. Append-only; (series, date) repeats across batches. | ETL metadata (generated) | 1 |
+| series_id | VARCHAR(50) | NOT NULL | FRED series identifier. | FRED observations request (series_id) | CPIAUCSL |
+| observation_date | DATE | NOT NULL | Observation date (month start for monthly series). | FRED observations.date | 2026-07-01 |
+| indicator_value | NUMERIC(18,6) | NULL | Observed index value. NULL where FRED reported "." (missing/unpublished). | FRED observations.value | 332.813000 |
+| units | VARCHAR(50) | NULL | Units label for the series. | FRED series config (fred_extractor) | index_1982_84 |
+| created_at_source_timestamp | TIMESTAMP | NULL | Business timestamp = the observation date. | fred_extractor (created_at) | 2026-07-01 00:00:00 |
+| updated_at_source_timestamp | TIMESTAMP | NULL | Incremental watermark = the observation date. | fred_extractor (updated_at) | 2026-07-01 00:00:00 |
+| bronze_batch_id | BIGINT | NOT NULL | ETL batch that loaded this row. Joins to audit.etl_batch_control.batch_key. | ETL metadata | 126 |
+| bronze_loaded_at_timestamp | TIMESTAMP | NOT NULL | When the row was written to Bronze (load time; source-freshness field). | ETL metadata (DEFAULT CURRENT_TIMESTAMP) | 2026-08-13 22:19:36 |
+| bronze_extracted_at_timestamp | TIMESTAMP | NULL | When the extractor pulled the row from FRED. | ETL metadata | 2026-08-13 22:19:35 |
+| bronze_source_system | VARCHAR(100) | NOT NULL | Source system identifier. | ETL metadata | api |
+| bronze_source_table_name | VARCHAR(150) | NULL | Logical source name. | ETL metadata | fred |
+| bronze_source_file_name | VARCHAR(255) | NULL | N/A for an API source. | ETL metadata | NULL |
+| bronze_source_row_number | BIGINT | NULL | Source row ordinal (if provided). | ETL metadata | NULL |
+| bronze_row_hash | TEXT | NOT NULL | Hash of business columns; detects revised observations between batches. | ETL metadata | a1b2… |
+| bronze_is_deleted_flag | BOOLEAN | NOT NULL | Soft-delete flag (unused for this source). | ETL metadata | false |
+| bronze_raw_payload_jsonb | JSONB | NULL | Raw observation payload as received. | ETL metadata | {"date":"2026-07-01","value":"332.813"} |

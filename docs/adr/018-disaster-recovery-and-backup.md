@@ -90,6 +90,16 @@ here every backup is tested automatically. (The shell scripts remain for manual/
 - **No point-in-time recovery** — RPO is a day, not a second. Acceptable for daily batch.
 - The **OLTP source's** own backup is out of scope (it's the operational system of record).
 
+## Update (2026-08-14) — restore drill scheduled and proven (closes AUDIT-003-M5)
+
+Audit 003 kept M5 open because the restore was "scripted but not proven on a schedule." It now is:
+the `printtime_backup_pipeline` DAG runs **daily at 10:00 America/Los_Angeles** (after the 08:00
+ELT) and its `verify_restore` task **restores the fresh dump into a throwaway `dr_verify` database
+and reconciles row counts** against live — failing loudly if they differ or the restore is empty.
+Proven on a live run: `live=gold.fact_retail_sales=67050  restored=67050 → ✓ restore verified`.
+Backups retain the newest 7 dumps (~32 MB each). Remaining (backlog, not blocking): an **offsite
+copy** of the dumps — on this local box they share the host disk.
+
 ## Related
 - ADR-004 (bronze append-only — the reproducibility that underpins the fallback)
 - ADR-002 (local Docker stack — RDS automated snapshots are the cloud target)

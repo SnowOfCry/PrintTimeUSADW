@@ -75,8 +75,21 @@ Everything is defined in one `docker-compose.yml`: clone the repo, copy `.env`, 
 - Enough people are using reports at the same time that one server can't keep up.
 - Keeping the system running (backups, upgrades, fixing outages) starts taking more of the engineer's time than building new things.
 
+## Secrets management (accepted-for-local — closes AUDIT-003-M4)
+
+Audit 003 flagged that secrets live in `.env` rather than a secret manager. This is a **conscious
+acceptance for the local posture**, not an oversight: `.env` is git-ignored (verified — no secrets
+in git history), required keys are fail-closed (`AIRFLOW_FERNET_KEY`, `AIRFLOW_SECRET_KEY` via
+`:?` in compose; `FRED_API_KEY` fails loud in the extractor), and every credential is a scoped
+least-privilege role (ADR-019). A managed secret store (Docker secrets / Vault / cloud KMS) is a
+property of the **deployed environment**, which ADR-002 explicitly defers — building one into a
+local Docker box would be overhead with no security gain here. **Trigger to revisit:** first cloud
+deployment, alongside the RDS/managed-Postgres migration this ADR already anticipates. With this
+recorded, every external-audit finding is either remediated or consciously accepted with a rationale.
+
 ## Related
 
 - ADR-001 (medallion architecture — platform-agnostic by design)
+- ADR-019 (least-privilege roles — the access half of secret hygiene)
 - `docker-compose.yml`, `docker/postgres/init/` — the stack definition
 - `docs/dw_readiness_review.md` — operational-documentation gap

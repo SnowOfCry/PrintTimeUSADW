@@ -42,7 +42,9 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+import pendulum
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -329,8 +331,8 @@ with DAG(
     dag_id=PIPELINE_NAME,
     description="PrintTimeUSA ELT pipeline: Extract → Bronze → Silver → Gold → Tests",
     default_args=DEFAULT_ARGS,
-    start_date=datetime(2025, 1, 1),
-    schedule="@daily",
+    start_date=pendulum.datetime(2025, 1, 1, tz="America/Los_Angeles"),
+    schedule="0 8 * * *",   # daily at 08:00 America/Los_Angeles (data-ready-by-8am SLA)
     catchup=False,
     # MED-11: a watermark-driven pipeline must never run concurrently — two runs
     # would share watermarks and delete+insert the same fact rows. This also makes

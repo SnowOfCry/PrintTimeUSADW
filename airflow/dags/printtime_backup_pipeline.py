@@ -21,7 +21,9 @@ and validated its load, so each backup captures a known-good state.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+import pendulum
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -88,8 +90,8 @@ with DAG(
     dag_id="printtime_backup_pipeline",
     description="Daily warehouse backup + automated restore-verification (ADR-018 / DR).",
     default_args=DEFAULT_ARGS,
-    start_date=datetime(2025, 1, 1),
-    schedule="0 3 * * *",      # 03:00 daily — after the nightly ELT
+    start_date=pendulum.datetime(2025, 1, 1, tz="America/Los_Angeles"),
+    schedule="0 10 * * *",     # 10:00 America/Los_Angeles — after the 08:00 ELT
     catchup=False,
     tags=["dr", "backup", "printtime"],
     doc_md=__doc__,

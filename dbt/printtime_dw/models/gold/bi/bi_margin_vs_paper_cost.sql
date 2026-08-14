@@ -21,13 +21,27 @@ with monthly as (
     group by 1
 ),
 
-ppi as (
+ppi_raw as (
     select
         (extract(year from silver_observation_date) * 100
          + extract(month from silver_observation_date))::int as month_key,
         silver_indicator_value                                as paper_ppi
     from {{ ref('econ_indicator') }}
-    where silver_series_id = 'WPU0911' and silver_indicator_value is not null
+    where silver_series_id = 'WPU0911'
+),
+
+-- Forward-fill any FRED gap (symmetric with bi_revenue_real's CPI handling) so a
+-- missing PPI month never leaves a hole in the margin-vs-cost trend.
+ppi as (
+    select
+        r.month_key,
+        coalesce(
+            r.paper_ppi,
+            (select r2.paper_ppi from ppi_raw r2
+             where r2.month_key < r.month_key and r2.paper_ppi is not null
+             order by r2.month_key desc limit 1)
+        ) as paper_ppi
+    from ppi_raw r
 )
 
 select

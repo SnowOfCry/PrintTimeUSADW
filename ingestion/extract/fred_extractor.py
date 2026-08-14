@@ -130,6 +130,15 @@ class FREDExtractor:
         logger.info("  %s: %d observations", series_id, len(df))
         return df
 
+    def _redact(self, text: str) -> str:
+        """Scrub the API key from any string before it is logged or raised.
+
+        FRED authenticates via a query-param, so the key is embedded in the request
+        URL — and urllib exceptions can carry that URL (`HTTPError.url`). This makes
+        it impossible for the key to reach a log line or a traceback.
+        """
+        return text.replace(self.api_key, "***") if self.api_key else text
+
     def _get(self, params: dict[str, str], series_id: str) -> dict:
         """GET with timeout + bounded retry/backoff on transient failures."""
         url = f"{FRED_BASE_URL}?{urllib.parse.urlencode(params)}"
@@ -146,12 +155,14 @@ class FREDExtractor:
                     series_id,
                     attempt,
                     self.MAX_RETRIES,
-                    exc,
+                    self._redact(str(exc)),
                     wait,
                 )
                 if attempt < self.MAX_RETRIES:
                     time.sleep(wait)
         raise RuntimeError(
-            f"FRED request failed for {series_id} after "
-            f"{self.MAX_RETRIES} attempts: {last_err}"
+            self._redact(
+                f"FRED request failed for {series_id} after "
+                f"{self.MAX_RETRIES} attempts: {last_err}"
+            )
         )

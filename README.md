@@ -380,7 +380,7 @@ The `docs/` tree is a first-class part of this project:
 |---|---|
 | **Concept guides** (CDC · SCD · Governance & Audit) | [`docs/guides/`](docs/guides/) — [CDC](docs/guides/cdc.md) · [SCD](docs/guides/scd.md) · [Governance & Audit](docs/guides/governance-and-audit.md) |
 | **Architecture Decision Records** (001–020) | [`docs/adr/`](docs/adr/) — start at [the index](docs/adr/README.md) |
-| **External audit reports** (2 independent DW reviews) | [`docs/audit/`](docs/audit/) |
+| **External audit reports** (3 independent DW reviews) | [`docs/audit/`](docs/audit/) |
 | **Fix log** (root causes + the rules they generalize to) | [`docs/fix/fix_log.md`](docs/fix/fix_log.md) |
 | **Gold star schema** (ER diagram + querying guide) | [`docs/architecture/gold_star_schema.md`](docs/architecture/gold_star_schema.md) |
 | **BI layer** (Power BI DAX measures + build guide) | [`docs/bi/`](docs/bi/) — serving views in `models/gold/bi/` |
@@ -415,7 +415,7 @@ broken model or failing test fails the PR before merge (not after).
 - [x] Silver layer — 20 contract-enforced incremental-merge models (`v0.1.0-silver`)
 - [x] dbt data tests — 75 silver tests (`unique` / `not_null` / `accepted_values` / `relationships`) + source freshness SLA
 - [x] Gold layer — 8 dims (6 SCD2) + 3 facts + 3 date views, 64 tests (`v0.2.0-gold`)
-- [x] Governance — 19 ADRs, data dictionaries, mappings, load strategies, fix log
+- [x] Governance — 20 ADRs, data dictionaries, mappings, load strategies, fix log
 - [x] Wire the full pipeline end-to-end in Airflow with real batch IDs — incremental fact loads active
 - [x] DRY the shared silver lineage/metadata block into a reusable macro (`silver_lineage_and_metadata`)
 - [x] BI serving layer — star-native `gold.bi_*` views + Power BI DAX/build guide (ADR-017)

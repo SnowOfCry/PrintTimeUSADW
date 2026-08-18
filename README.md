@@ -22,11 +22,12 @@ in Docker.
   deduplication, and ADR-005 cleaning standards.
 - **Complete gold star schema — 14/14 objects.** 8 dimensions (6 SCD Type 2 with full version
   history), 3 facts, and 3 role-playing date views. Every fact reconciles to silver **to the
-  cent**, and the whole warehouse passes **168/168 dbt tests**.
+  cent**, and the whole warehouse passes **195/195 dbt tests**.
 - **Least-privilege security** — three purpose-scoped database roles (ingestion / dbt / BI
   reader) instead of a shared superuser ([ADR-019](docs/adr/019-least-privilege-database-roles.md)).
-- **Independently audited** — two external Data-Warehouse audits ([`docs/audit/`](docs/audit/))
-  with every HIGH and MEDIUM finding remediated and traced in the [fix log](docs/fix/fix_log.md).
+- **Independently audited** — three external Data-Warehouse audits ([`docs/audit/`](docs/audit/)),
+  every finding **remediated or consciously accepted (zero open)** and traced in the
+  [fix log](docs/fix/fix_log.md).
 - **API ingestion** — beyond the OLTP source, an HTTP **FRED** (Federal Reserve) source lands
   CPI/PPI into bronze (secrets, retry, incremental), powering nominal-vs-**real** revenue and
   margin-vs-input-cost analyses ([ADR-020](docs/adr/020-external-fred-macro-source.md)).
@@ -45,7 +46,7 @@ in Docker.
 | Orchestration | Apache Airflow 2.9 |
 | Database GUI | pgAdmin 4 |
 | Security | Least-privilege PostgreSQL roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019) |
-| Code quality | ruff, mypy, pytest + 168 dbt data tests (CI on every push) |
+| Code quality | ruff, mypy, pytest + 195 dbt data tests (CI on every push) |
 | Runtime | Docker + Docker Compose |
 
 ---
@@ -121,12 +122,13 @@ See [ADR-003: ELT over ETL](docs/adr/003-elt-over-etl.md) and
 | **Silver** (20 models) | ✅ **Complete** — contract-enforced incremental merge — released as `v0.1.0-silver` |
 | **Gold** (Kimball star schema, 14 objects) | ✅ **Complete** — 8 dims (6 SCD2) + 3 facts + 3 date views — released as `v0.2.0-gold` |
 | **Audit** (batch control + lineage) | ✅ In place |
-| **Orchestration** (Airflow DAG) | ✅ **Wired end-to-end** — bronze → silver → gold → tests, with real batch IDs; the fact loads are genuinely incremental |
+| **Orchestration** (Airflow DAG) | ✅ **Wired + scheduled** — bronze → silver → gold → tests, real batch IDs, genuinely incremental fact loads; **runs daily** (ELT 08:00 PT; backup + restore-verify 10:00 PT) |
+| **API source** (FRED macro indicators) | ✅ CPI/PPI → real-terms revenue + margin-vs-cost, DQ-tested ([ADR-020](docs/adr/020-external-fred-macro-source.md)) |
 | **Security** (least-privilege RBAC) | ✅ Three scoped roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019) |
-| **Governance** (19 ADRs, dictionaries, mappings, fix log) | ✅ Complete |
-| **External audits** (2 independent reviews) | ✅ All HIGH + MEDIUM findings remediated — see [`docs/audit/`](docs/audit/) + [fix log](docs/fix/fix_log.md) |
+| **Governance** (20 ADRs, dictionaries, mappings, fix log) | ✅ Complete |
+| **External audits** (3 independent reviews) | ✅ **Every finding remediated or consciously accepted — zero open** — see [`docs/audit/`](docs/audit/) + [fix log](docs/fix/fix_log.md) |
 
-**Warehouse-wide: `dbt build --select silver gold` passes all 168 dbt tests.**
+**Warehouse-wide: `dbt build --select silver gold` passes all 195 dbt tests.**
 The facts reconcile exactly to silver — retail sales, payments, and customer lifetime value all
 match to the cent, with zero unresolved dimension keys. See the
 [gold star schema](docs/architecture/gold_star_schema.md) for the dimensional model.
@@ -139,7 +141,7 @@ match to the cent, with zero unresolved dimension keys. See the
 PrintTimeUSADW/
 ├── docker/                          Docker build contexts (postgres, airflow, dbt)
 ├── airflow/
-│   └── dags/printtime_elt_pipeline.py   ELT pipeline DAG
+│   └── dags/                            ELT pipeline + backup/restore-verify DAGs
 ├── ingestion/                       Python Extract + Load (no business logic)
 │   ├── extract/  load/  utils/  config/  main.py
 ├── dbt/printtime_dw/                dbt project
@@ -333,7 +335,10 @@ dbt runs inside the Airflow image (`dbt-core`/`dbt-postgres` pinned identically 
 logs and artifacts to `/opt/airflow/dbt_artifacts` so orchestrated runs never collide with
 ad-hoc ones in the dbt container.
 
-Trigger manually from the Airflow UI (`printtime_elt_pipeline` → **Trigger DAG**), or on schedule.
+**Runs daily at 08:00 America/Los_Angeles** (a "data-ready-by-8am" SLA; `catchup=False`), and is
+also triggerable manually from the Airflow UI. A companion DAG, **`printtime_backup_pipeline`**,
+runs at **10:00** — `pg_dump` the warehouse, then restore the fresh dump into a throwaway DB and
+reconcile row counts (automated restore-verification, ADR-018).
 
 Verified end to end: a `state_name` change in the OLTP source flowed to bronze → silver (1 row
 rewritten, stamped with a real batch id, the other two untouched) → gold (every California store
@@ -399,7 +404,7 @@ hotfix/*    emergency fixes off main
 
 CI runs on every push: **ruff** (lint), **mypy** (types), **pytest** (unit),
 `docker compose config` validation, and a **`dbt build`** against an ephemeral `postgres:16` —
-which compiles every model, enforces the contracts, and runs all **168 dbt data tests**, so a
+which compiles every model, enforces the contracts, and runs all **195 dbt data tests**, so a
 broken model or failing test fails the PR before merge (not after).
 
 ---
@@ -415,7 +420,7 @@ broken model or failing test fails the PR before merge (not after).
 - [x] DRY the shared silver lineage/metadata block into a reusable macro (`silver_lineage_and_metadata`)
 - [x] BI serving layer — star-native `gold.bi_*` views + Power BI DAX/build guide (ADR-017)
 - [x] Least-privilege database roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019)
-- [x] Two external DW audits remediated — all HIGH + MEDIUM findings closed (`docs/audit/`, `docs/fix/`)
+- [x] Three external DW audits — every finding remediated or consciously accepted, **zero open** (`docs/audit/`, `docs/fix/`)
 - [x] API source — FRED macro indicators (CPI, PPI) → real-terms revenue + margin-vs-cost (ADR-020)
 - [ ] Tableau version of the dashboards (same serving views — for the managers to compare)
 

@@ -1,5 +1,11 @@
 # PrintTimeUSA Data Warehouse
 
+> ### 📌 Portfolio project — public version
+> This is my personal data-warehouse project, published **only as a public/portfolio version for
+> recruiters and hiring managers to review**. **PrintTimeUSA is a fictional retail print shop and
+> every record is synthetically generated** — there is **no real company, customer, employee, or
+> PII data** anywhere in this repository, and nothing here is a real or private company system.
+
 A production-shaped, fully containerized **ELT data warehouse** for PrintTimeUSA — a retail
 print shop in Modesto, CA. It ingests operational data from an OLTP source into a raw **bronze**
 layer, refines it into a clean, contract-enforced **silver** layer with dbt, and serves a

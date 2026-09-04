@@ -78,6 +78,73 @@ in Docker.
 
 ## Architecture
 
+The warehouse is described at two altitudes — the **data architecture** (the medallion: what each
+layer holds and how data moves through it) and the **project architecture** (the stack and
+orchestration that implement it).
+
+### Data Architecture
+
+Sources land in a raw **bronze** layer, are refined into a clean **silver** layer, and served as a
+business-ready **gold** star schema — with an `audit` / orchestration / governance band spanning
+every layer.
+
+```
+      SOURCES                    DATA WAREHOUSE · PostgreSQL 16                   CONSUME
+ ────────────────      ───────────────────────────────────────────────    ─────────────────
+
+┌──────────────┐      ┌─────────┐    ┌─────────┐    ┌──────────┐          ┌───────────────┐
+│ OLTP source  │      │ BRONZE  │    │ SILVER  │    │   GOLD   │          │ BI & Reporting│
+│ 20 rel.tables│      │ raw     │    │ cleaned │    │ business-│          │ Power BI (DAX)│
+│ (SQLAlchemy) │ E+L  │ as-is   │dbt │ typed   │dbt │ ready    │bi_reader │ Tableau (plan)│
+│ FRED CPI/PPI │ ───▶ │ append- │ ─▶ │ 1 row / │ ─▶ │ Kimball  │ ───────▶ │ Ad-hoc SQL    │
+│ (HTTPS·JSON) │      │ only    │    │ key     │    │ star     │          │               │
+└──────────────┘      └─────────┘    └─────────┘    └──────────┘          └───────────────┘
+                           │               │               │
+                           └──── audit · Airflow · governance · RBAC (all layers) ────┘
+```
+
+**Sources**
+
+| Source | What it is | Interface | Lands in bronze as |
+|---|---|---|---|
+| OLTP database | 20 operational tables (customers, invoices, invoice lines, payments, refunds, products, stores, employees, status histories…) | DB connection (SQLAlchemy) | `oltp_*` · `ref_*` |
+| FRED (Federal Reserve) | External macro API — CPI & PPI monthly series | HTTPS REST + API key (JSON) | `econ_indicator` |
+
+**Layer specification**
+
+| Aspect | Bronze — *Raw* | Silver — *Cleaned & Standardized* | Gold — *Business-Ready* |
+|---|---|---|---|
+| **Purpose** | As-received landing zone; full source history | Clean, typed, conformed — one current row per business key | Analytics-ready dimensional model + serving layer |
+| **Object type** | Tables (`bronze`) | Tables (`silver`), contract-enforced (types, `NOT NULL`, PK) | Tables (`dim_*`, `fact_*`) **+** views (`bi_*`, role-playing date views) |
+| **Load** | Batch · append-only — incremental by watermark (transactional), full reload (reference) | Batch · incremental hash-gated merge · deterministic dedup | SCD Type 2 dims · per-grain incremental facts · no-load views |
+| **Written by** | Python (Extract + Load) | dbt Core | dbt Core |
+| **Transformations** | None (as-is) + load-metadata stamps | Cleansing · standardization · normalization · dedup · derived columns · contracts | Integration/conforming · surrogate keys · SCD2 history · aggregation · business logic |
+| **Data model** | None — mirrors the source | Normalized — one current row per key | Kimball star schema + flat BI views + aggregated marts |
+
+**Consume**
+
+| Channel | Tool | Reads from |
+|---|---|---|
+| BI & Reporting | Power BI (DAX); Tableau planned | `gold.bi_*` serving views |
+| Ad-hoc analytics | SQL | Gold star schema |
+
+All consumer access flows through the least-privilege **`pt_bi_reader`** role — dashboards and
+analysts touch only the curated **gold** serving layer, never bronze or silver.
+
+**Where this build diverges from the textbook medallion** — each choice is deliberate and has an ADR:
+
+- **Bronze is append-only incremental** (per-table watermarks), not truncate-&-insert, so raw
+  history is preserved and every downstream run is reproducible.
+- **Silver is an incremental hash-gated merge**, not a full reload — only genuinely changed rows
+  are rewritten.
+- **Gold dimensions are materialized tables with SCD Type 2 history**, not views — versioned
+  history and query performance are the reason; views are reserved for the BI serving layer.
+- **Transformations are dbt SQL models**, not stored procedures ([ADR-003](docs/adr/003-elt-over-etl.md)).
+
+See [ADR-001: Adopt a medallion architecture](docs/adr/001-adopt-medallion-architecture.md).
+
+### Project Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          AIRFLOW (Orchestration)                        │
@@ -107,7 +174,7 @@ audit    ETL batch control, incremental watermarks, row-level change trail
 - **Govern** — `audit.etl_batch_control` records every batch (run stats + watermarks);
   `audit.audit_log` holds the row-level change trail.
 
-### Why ELT instead of ETL
+#### Why ELT instead of ETL
 
 | Concern | ETL | ELT (this project) |
 |---|---|---|

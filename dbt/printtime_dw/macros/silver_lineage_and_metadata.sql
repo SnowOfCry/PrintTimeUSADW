@@ -28,17 +28,17 @@
         source_updated_at='updated_at_source_timestamp'
 ) -%}
         -- ── source lineage carried forward from bronze ──────────────────────
-        bronze_source_system::varchar(100)         as silver_source_system,
-        bronze_source_table_name::varchar(150)     as silver_source_table_name,
-        {{ source_record_id }}::text               as silver_source_record_id,
-        {{ source_created_at }}::timestamp         as silver_source_created_at_timestamp,
-        {{ source_updated_at }}::timestamp         as silver_source_updated_at_timestamp,
-        bronze_record_id::bigint                   as silver_bronze_record_id,
-        bronze_batch_id::bigint                    as silver_bronze_batch_id,
+        cast(bronze_source_system     as string)    as silver_source_system,
+        cast(bronze_source_table_name as string)    as silver_source_table_name,
+        cast({{ source_record_id }}   as string)    as silver_source_record_id,
+        cast({{ source_created_at }}  as timestamp) as silver_source_created_at_timestamp,
+        cast({{ source_updated_at }}  as timestamp) as silver_source_updated_at_timestamp,
+        cast(bronze_record_id         as bigint)    as silver_bronze_record_id,
+        cast(bronze_batch_id          as bigint)    as silver_bronze_batch_id,
 
         -- ── silver's own metadata (stamped as this row is built) ────────────
-        {{ require_batch_id('silver_batch_id') }}::bigint   as silver_batch_id,
-        current_timestamp::timestamp               as silver_created_at_timestamp,
-        current_timestamp::timestamp               as silver_updated_at_timestamp,
-        bronze_is_deleted_flag::boolean            as silver_is_deleted_flag
+        cast({{ require_batch_id('silver_batch_id') }} as bigint) as silver_batch_id,
+        current_timestamp()                         as silver_created_at_timestamp,
+        current_timestamp()                         as silver_updated_at_timestamp,
+        cast(bronze_is_deleted_flag   as boolean)   as silver_is_deleted_flag
 {%- endmacro -%}

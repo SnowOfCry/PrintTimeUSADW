@@ -52,7 +52,10 @@ where p.silver_updated_at_timestamp > {{ last_gold_watermark('gold.fact_payments
 --   changed_set   SQL selecting the changed match_col values (a changed_* macro)
 --   reason_sql    SQL expression (may reference alias f) for change_reason
 {% macro audit_stage_before_image(record_key, match_col, changed_set, reason_sql="'source_update'") -%}
-{% if is_incremental() %}
+{# Databricks port TODO (M8): this uses Postgres temp tables + to_jsonb. Gated to
+   postgres so Databricks incremental fact re-runs stay green; audit-log feature
+   is deferred, not the fact data. #}
+{% if is_incremental() and target.type == 'postgres' %}
 drop table if exists _audit_stage_{{ this.identifier }};
 create temp table _audit_stage_{{ this.identifier }} as
 select
@@ -88,7 +91,8 @@ coalesce((select string_agg(distinct ia.silver_adjustment_reason, '; ')
 --   surrogate_key   the fact's dbt-managed key (excluded from the diff: it is
 --                   regenerated on every reload and is not a business change).
 {% macro audit_write_change_log(target, surrogate_key) -%}
-{% if is_incremental() %}
+{# Databricks port TODO (M8): Postgres jsonb diff + temp table. Gated to postgres. #}
+{% if is_incremental() and target.type == 'postgres' %}
 insert into audit.audit_log
     (table_name, operation_type, record_key, old_row, new_row, changed_columns,
      change_reason, etl_batch_id, source_system, changed_by_app_user)

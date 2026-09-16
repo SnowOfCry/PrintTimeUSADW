@@ -304,10 +304,10 @@ We built **layer by layer** and fixed each error the engine reported. Every fix 
 - [x] Local tooling (Python, venv, dbt-databricks) installed
 - [x] dbt connected to Databricks (`dbt debug` passes)
 - [x] First model migrated end-to-end: `silver.customer`
-- [x] **ALL 49 models ported + building on Databricks (silver 21/21, gold 28/28)** ✅
-- [x] All 21 bronze tables created in Unity Catalog
+- [x] **ALL 49 models ported + building on Databricks — 49/49 PASS, first-run AND incremental** ✅
+- [x] All 21 bronze tables + 2 audit tables created in Unity Catalog
 - [ ] Load real sample data for every source; run `dbt test`; reconcile against Postgres
-- [ ] Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs
+- [ ] Port the incremental-only audit change-trail macro (temp table + jsonb) for 2nd+ runs (gated to postgres for now)
 - [ ] Unity Catalog grants + a Databricks Workflow
 - [ ] Decide → paid Azure workspace + ADLS Gen2
 

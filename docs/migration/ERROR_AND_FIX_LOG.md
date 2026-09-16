@@ -128,6 +128,18 @@ and exactly how each was fixed. Kept for future-me, teammates, and interviews.
 - **Fix:** Ran dbt via a tiny Python runner (`scratchpad/run_dbt.py`) that loads `.env` with `python-dotenv` and `subprocess.run(["dbt", ...], env=...)` — Python sets the env string verbatim, no MSYS. Same trick (`databricks-sql-connector` in `exec_sql.py`) ran the bronze DDL directly.
 - **Lesson:** When a shell corrupts your inputs, drive the tool from Python where the strings are passed verbatim. cmd/PowerShell work too.
 
+### 18. Incremental-only failures: `create temp table` + `to_jsonb` (audit trail)
+- **Symptom:** First build passed, but a **second** run of the two delete+insert facts failed: `Syntax error at or near 'create'` (then `create temp table … to_jsonb(f)`).
+- **Cause:** The `audit_change_trail` macros run as fact `pre_hook`/`post_hook` **only when `is_incremental()`** (2nd+ run). They use Postgres `create temp table`, `to_jsonb`, `jsonb_agg`, `jsonb_each_text` — none exist on Databricks. First runs skipped them, so the problem hid until the tables already existed.
+- **Fix:** Gated both macros behind `{% if is_incremental() and target.type == 'postgres' %}` — Postgres keeps the audit-log feature; Databricks skips it (build stays green). Full Databricks port (temp views + `to_json`/`from_json` + map-diff) is deferred (milestone M8).
+- **Lesson:** **Test the incremental path, not just the first build.** `is_incremental()`-gated SQL is invisible on run 1. Auxiliary features that can't be cheaply ported can be **gated by `target.type`** so both dialects coexist on one branch.
+
+### 19. `TABLE_OR_VIEW_NOT_FOUND: audit.etl_batch_control`
+- **Symptom:** Incremental facts failed: `audit.etl_batch_control cannot be found`.
+- **Cause:** The facts' incremental watermark (`last_gold_watermark`) reads `audit.etl_batch_control`. We created the `audit` *schema* but not its *tables*.
+- **Fix:** Translated `sql/audit/002_create_audit_tables.sql` to Databricks (`sql/databricks_poc/audit_tables_databricks.sql`) and created both audit tables. Empty → the watermark defaults to `1900-01-01`, so facts do a full rebuild until real batch rows exist.
+- **Lesson:** A schema is not its tables. Any table a model *reads* (even in a watermark subquery) must exist. Also: when splitting a `.sql` file on `;`, **strip `--` comments first** — a `;` inside a comment (e.g. "safe to re-run; …") splits mid-comment and corrupts the next statement.
+
 ---
 
 ## SQL dialect translation cheat-sheet (Postgres → Databricks)
@@ -166,7 +178,8 @@ The mechanical core of the migration. Same patterns repeat across all 49 models.
 - [x] **M3** Connect dbt → `dbt debug` passes
 - [x] **M4** Port ALL 49 models + macros to Databricks dialect (SQL + contracts) ✅
 - [x] **M5** Create all 21 bronze tables in Unity Catalog ✅
-- [x] **M6a** Build silver (21/21 PASS) + gold (28/28 PASS) on Databricks ✅
+- [x] **M6a** Build the full project on Databricks — **49/49 PASS**, first-run AND incremental ✅
+- [x] Create audit tables (`etl_batch_control`, `audit_log`) in Unity Catalog ✅
 - [ ] **M6b** Load real sample data for all sources; run `dbt test`; reconcile vs Postgres
 - [ ] **M7** Unity Catalog grants + a Databricks Workflow
 - [ ] **M8** Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs

@@ -18,7 +18,7 @@
 
 -- Last succeeded gold batch end for a target (the incremental watermark).
 {% macro last_gold_watermark(target) -%}
-(select coalesce(max(batch_end_timestamp), '1900-01-01'::timestamp)
+(select coalesce(max(batch_end_timestamp), cast('1900-01-01' as timestamp))
  from audit.etl_batch_control
  where target_table = '{{ target }}' and batch_status = 'succeeded')
 {%- endmacro %}
@@ -38,7 +38,7 @@ where i2.silver_updated_at_timestamp > {{ last_gold_watermark('gold.fact_retail_
 
 -- The payment source ids changed since the last gold.fact_payments batch.
 {% macro changed_payment_ids() -%}
-select p.silver_payment_id::varchar(100)
+select cast(p.silver_payment_id as string)
 from {{ ref('payment') }} p
 where p.silver_updated_at_timestamp > {{ last_gold_watermark('gold.fact_payments') }}
 {%- endmacro %}
@@ -56,10 +56,10 @@ where p.silver_updated_at_timestamp > {{ last_gold_watermark('gold.fact_payments
 drop table if exists _audit_stage_{{ this.identifier }};
 create temp table _audit_stage_{{ this.identifier }} as
 select
-    f.{{ record_key }}::varchar(100)       as record_key,
+    cast(f.{{ record_key }} as string)     as record_key,
     to_jsonb(f)                            as old_row,
     (to_jsonb(f) ->> 'source_record_id')   as match_key,   -- pairs old row to its replacement
-    ({{ reason_sql }})::varchar(500)       as change_reason,
+    cast(({{ reason_sql }}) as string)       as change_reason,
     f.source_system                        as source_system
 from {{ this }} f
 where f.{{ match_col }} in (
@@ -108,7 +108,7 @@ select
           and o.value is distinct from (to_jsonb(f) ->> o.key)
     ) end,
     s.change_reason,
-    '{{ gold_batch_id() }}'::varchar(50),
+    cast('{{ gold_batch_id() }}' as string),
     s.source_system,
     'dbt:printtime_elt_pipeline'
 from _audit_stage_{{ this.identifier }} s

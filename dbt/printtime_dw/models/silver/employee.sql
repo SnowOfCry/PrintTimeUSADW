@@ -45,19 +45,19 @@ cleaned as (
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Person names: trim, collapse internal spaces, Title Case (ADR-005).
         -- Codes/roles keep source case; email lowercased; phone digits only.
-        employee_id::bigint                                                                as silver_employee_id,
-        nullif(trim(employee_code), '')::varchar(30)                                       as silver_employee_code,
-        initcap(nullif(regexp_replace(trim(first_name), '\s+', ' ', 'g'), ''))::varchar(100)  as silver_first_name,
-        initcap(nullif(regexp_replace(trim(last_name),  '\s+', ' ', 'g'), ''))::varchar(100)  as silver_last_name,
+        cast(employee_id as bigint)                                                                as silver_employee_id,
+        cast(nullif(trim(employee_code), '') as string)                                       as silver_employee_code,
+        cast(initcap(nullif(regexp_replace(trim(first_name), '\\s+', ' '), '')) as string)  as silver_first_name,
+        cast(initcap(nullif(regexp_replace(trim(last_name),  '\\s+', ' '), '')) as string)  as silver_last_name,
         -- Derived: source full_name is empty, so build it from first + last.
-        initcap(nullif(regexp_replace(
-            trim(concat_ws(' ', first_name, last_name)), '\s+', ' ', 'g'), ''))::varchar(200)  as silver_full_name,
-        nullif(trim(lower(email)), '')::varchar(255)                                       as silver_email,
-        nullif(regexp_replace(phone, '[^0-9]', '', 'g'), '')::varchar(50)                  as silver_phone_number,
-        nullif(trim(role), '')::varchar(30)                                                as silver_role,
-        store_id::bigint                                                                   as silver_store_id,
-        hire_date::date                                                                    as silver_hire_date,
-        is_active_flag::boolean                                                            as silver_is_active_flag,
+        cast(initcap(nullif(regexp_replace(
+            trim(concat_ws(' ', first_name, last_name)), '\\s+', ' '), '')) as string)  as silver_full_name,
+        cast(nullif(trim(lower(email)), '') as string)                                       as silver_email,
+        cast(nullif(regexp_replace(phone, '[^0-9]', ''), '') as string)                  as silver_phone_number,
+        cast(nullif(trim(role), '') as string)                                                as silver_role,
+        cast(store_id as bigint)                                                                   as silver_store_id,
+        cast(hire_date as date)                                                                    as silver_hire_date,
+        cast(is_active_flag as boolean)                                                            as silver_is_active_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='employee_id') }}
 
@@ -72,9 +72,9 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_employee_id::text,
+                cast(silver_employee_id as string),
                 coalesce(silver_employee_code, ''),
                 coalesce(silver_first_name, ''),
                 coalesce(silver_last_name, ''),
@@ -82,11 +82,11 @@ final as (
                 coalesce(silver_email, ''),
                 coalesce(silver_phone_number, ''),
                 coalesce(silver_role, ''),
-                coalesce(silver_store_id::text, ''),
-                coalesce(silver_hire_date::text, ''),
-                coalesce(silver_is_active_flag::text, '')
+                coalesce(cast(silver_store_id as string), ''),
+                coalesce(cast(silver_hire_date as string), ''),
+                coalesce(cast(silver_is_active_flag as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

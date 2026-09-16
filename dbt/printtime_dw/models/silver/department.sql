@@ -45,11 +45,11 @@ deduped as (
 cleaned as (
     select
         -- ── business columns ────────────────────────────────────────────────
-        department_id::bigint                                                     as silver_department_id,
-        nullif(trim(department_code), '')::varchar(20)                            as silver_department_code,
-        nullif(regexp_replace(trim(department_name), '\s+', ' ', 'g'), '')::varchar(100)  as silver_department_name,
-        nullif(regexp_replace(trim(description),     '\s+', ' ', 'g'), '')::varchar(200)  as silver_department_description,
-        is_active_flag::boolean                                                   as silver_is_active_flag,
+        cast(department_id as bigint)                                                     as silver_department_id,
+        cast(nullif(trim(department_code), '') as string)                            as silver_department_code,
+        cast(nullif(regexp_replace(trim(department_name), '\\s+', ' '), '') as string)  as silver_department_name,
+        cast(nullif(regexp_replace(trim(description),     '\\s+', ' '), '') as string)  as silver_department_description,
+        cast(is_active_flag as boolean)                                                   as silver_is_active_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='department_id') }}
 
@@ -61,13 +61,13 @@ cleaned as (
 --    (never metadata, or every run would look like a change).
 final as (
     select *,
-        md5(concat_ws('|',
-            silver_department_id::text,
+        cast(md5(concat_ws('|',
+            cast(silver_department_id as string),
             coalesce(silver_department_code, ''),
             coalesce(silver_department_name, ''),
             coalesce(silver_department_description, ''),
-            coalesce(silver_is_active_flag::text, '')
-        ))::text as silver_row_hash
+            coalesce(cast(silver_is_active_flag as string), '')
+        )) as string) as silver_row_hash
     from cleaned
 )
 

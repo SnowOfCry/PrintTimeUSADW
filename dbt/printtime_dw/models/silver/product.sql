@@ -48,18 +48,18 @@ deduped as(
 ),
 cleaned as(
     select 
-        product_id::bigint as silver_product_id,
-        trim(sku)::varchar(50)  as silver_product_sku,
-        trim(product_name)::varchar(255)  as silver_product_name,
-        nullif(trim(description),'')::text as silver_product_description,
-        department_id::bigint as silver_department_id,
-        category_id::bigint as silver_category_id,
-        trim(brand)::varchar(100) as silver_brand_name,
-        unit_cost_amount::numeric(18,2) as silver_standard_cost_amount,
-        markup_pct::numeric(8,4) as silver_markup_pct,
-        standard_price_amount::numeric(18,2) as silver_standard_price_amount,
-        is_local_made_flag::boolean as silver_is_local_made_flag,
-        is_active_flag::boolean as silver_is_active_flag,
+        cast(product_id as bigint) as silver_product_id,
+        cast(trim(sku) as string)  as silver_product_sku,
+        cast(trim(product_name) as string)  as silver_product_name,
+        cast(nullif(trim(description),'') as string) as silver_product_description,
+        cast(department_id as bigint) as silver_department_id,
+        cast(category_id as bigint) as silver_category_id,
+        cast(trim(brand) as string) as silver_brand_name,
+        cast(unit_cost_amount as decimal(18,2)) as silver_standard_cost_amount,
+        cast(markup_pct as decimal(8,4)) as silver_markup_pct,
+        cast(standard_price_amount as decimal(18,2)) as silver_standard_price_amount,
+        cast(is_local_made_flag as boolean) as silver_is_local_made_flag,
+        cast(is_active_flag as boolean) as silver_is_active_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='product_id') }}
 
@@ -68,20 +68,20 @@ cleaned as(
 ),
 final as(
     select *,
-        md5(concat_ws('|',
-            silver_product_id::text,
+        cast(md5(concat_ws('|',
+            cast(silver_product_id as string),
             coalesce(silver_product_sku, ''),
             coalesce(silver_product_name, ''),
             coalesce(silver_product_description, ''),
-            coalesce(silver_department_id::text, ''),
-            coalesce(silver_category_id::text, ''),
+            coalesce(cast(silver_department_id as string), ''),
+            coalesce(cast(silver_category_id as string), ''),
             coalesce(silver_brand_name, ''),
-            coalesce(silver_standard_cost_amount::text, ''),
-            coalesce(silver_markup_pct::text, ''),
-            coalesce(silver_standard_price_amount::text, ''),
-            coalesce(silver_is_local_made_flag::text, ''),
-            coalesce(silver_is_active_flag::text, '')
-        ))::text as silver_row_hash
+            coalesce(cast(silver_standard_cost_amount as string), ''),
+            coalesce(cast(silver_markup_pct as string), ''),
+            coalesce(cast(silver_standard_price_amount as string), ''),
+            coalesce(cast(silver_is_local_made_flag as string), ''),
+            coalesce(cast(silver_is_active_flag as string), '')
+        )) as string) as silver_row_hash
     from cleaned
 )
 

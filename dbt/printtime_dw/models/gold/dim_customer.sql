@@ -1,11 +1,11 @@
 -- =============================================================================
 -- gold.dim_customer
--- Type:    SCD Type 2 dimension (versioned history) — the ADR-015 pattern.
+-- Type:    SCD Type 2 dimension (versioned history) â€” the ADR-015 pattern.
 -- Grain:   one row per customer VERSION (current version: is_current = true).
 -- Source:  silver.customer
 -- Lookups: silver.customer_address (primary address), silver.state, gold.dim_date
 -- Spec:    sql/gold/002_create_gold_tables.sql (gold.dim_customer)
---          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md §7
+--          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md Â§7
 --          ADR-007 (Type 2), ADR-015 (SCD2 pattern), ADR-011 (-1 member),
 --          ADR-014 (customer_county has no source)
 --
@@ -13,10 +13,10 @@
 --   * Address grain: joined on silver_is_primary_flag, which is exactly one
 --     address per customer (verified: 10,000 primary rows / 10,000 customers,
 --     0 with multiples), so the join cannot fan out and duplicate customers.
---   * customer_county is hardcoded 'Not Provided' — no county exists anywhere in
+--   * customer_county is hardcoded 'Not Provided' â€” no county exists anywhere in
 --     OLTP/bronze/silver (ADR-014, backlog #3). It is a documented gap, not a
 --     data-quality failure, so dq_issue_flag stays false for it.
---   * first_order_date_key resolves against gold.dim_date — the first dim that
+--   * first_order_date_key resolves against gold.dim_date â€” the first dim that
 --     references another GOLD model; unmatched dates fall back to the -1 member
 --     (ADR-011). Role-played as vw_first_order_date (ADR-010).
 --   * Address/status/city-state changes are why this dim is Type 2 (ADR-007).
@@ -25,17 +25,12 @@
     materialized='incremental',
     incremental_strategy='append',
     on_schema_change='fail',
-    indexes=[
-        {'columns': ['customer_id', 'is_current']},
-        {'columns': ['valid_from', 'valid_to']},
-        {'columns': ['first_order_date_key']},
-    ],
     post_hook=[
         "
         update {{ this }} d
         set    is_current            = false,
                valid_to              = nv.valid_from,
-               etl_updated_timestamp = current_timestamp
+               etl_updated_timestamp = current_timestamp()
         from   {{ this }} nv
         where  nv.source_record_id = d.source_record_id
           and  nv.row_version      = d.row_version + 1
@@ -49,38 +44,38 @@
 --    first-order date to its dim_date key.
 with staged as (
     select
-        c.silver_customer_id::varchar(100)                      as source_record_id,
-        c.silver_customer_account_no::varchar(30)               as customer_id,
-        c.silver_customer_name::varchar(100)                    as customer_name,
-        a.silver_street_address_line_1::varchar(200)            as customer_street_address,
-        a.silver_city::varchar(100)                             as customer_city,
+        cast(c.silver_customer_id as string)                      as source_record_id,
+        cast(c.silver_customer_account_no as string)               as customer_id,
+        cast(c.silver_customer_name as string)                    as customer_name,
+        cast(a.silver_street_address_line_1 as string)            as customer_street_address,
+        cast(a.silver_city as string)                             as customer_city,
         -- No county source anywhere (ADR-014 / backlog #3): documented gap.
-        'Not Provided'::varchar(100)                            as customer_county,
-        coalesce(st.silver_state_name, a.silver_state_code)::varchar(50)
+        cast('Not Provided' as string)                            as customer_county,
+        cast(coalesce(st.silver_state_name, a.silver_state_code) as string)
                                                                 as customer_state,
-        -- "City, State" display attribute (mapping §7)
-        nullif(concat_ws(', ',
+        -- "City, State" display attribute (mapping Â§7)
+        cast(nullif(concat_ws(', ',
             a.silver_city,
             coalesce(st.silver_state_name, a.silver_state_code)
-        ), '')::varchar(150)                                    as customer_city_state,
+        ), '') as string)                                    as customer_city_state,
         -- Role-playing FK to dim_date; unmatched -> -1 Not Provided (ADR-011)
-        coalesce(dd.date_key, -1)::integer                      as first_order_date_key,
-        c.silver_is_deleted_flag::boolean                       as is_deleted,
-        c.silver_source_system::varchar(50)                     as source_system,
+        cast(coalesce(dd.date_key, -1) as int)                      as first_order_date_key,
+        cast(c.silver_is_deleted_flag as boolean)                       as is_deleted,
+        cast(c.silver_source_system as string)                     as source_system,
         -- Effective-dating input (ADR-015 / audit HIGH-3 fix): a NEW version is dated
         -- by the SOURCE update instant, not the load date, so the history reflects
         -- when the change actually happened rather than when the ETL happened to run.
         c.silver_source_updated_at_timestamp                    as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: a change here = a new version.
-        encode(digest(concat_ws('|',
+        cast(encode(digest(concat_ws('|',
             coalesce(c.silver_customer_account_no, ''),
             coalesce(c.silver_customer_name, ''),
             coalesce(a.silver_street_address_line_1, ''),
             coalesce(a.silver_city, ''),
             coalesce(coalesce(st.silver_state_name, a.silver_state_code), ''),
-            coalesce(dd.date_key::text, ''),
-            coalesce(c.silver_is_deleted_flag::text, '')
-        ), 'sha256'), 'hex')::char(64)                          as record_hash
+            coalesce(cast(dd.date_key as string), ''),
+            coalesce(cast(c.silver_is_deleted_flag as string), '')
+        ), 'sha256'), 'hex') as string)                          as record_hash
     from {{ ref('customer') }} c
     -- exactly one primary address per customer (verified), so no fan-out
     left join {{ ref('customer_address') }} a
@@ -100,7 +95,7 @@ changed as (
         {% if is_incremental() %}
         , coalesce(c.row_version, 0) as current_row_version
         {% else %}
-        , 0::integer    as current_row_version
+        , cast(0 as int)    as current_row_version
         {% endif %}
     from staged s
     {% if is_incremental() %}
@@ -116,15 +111,15 @@ changed as (
 --    so it gets a fresh key = (highest key so far) + its position.
 keyed as (
     select
-        (
+        cast((
             {% if is_incremental() %}
             (select coalesce(max(customer_key), 0) from {{ this }} where customer_key <> -1)
             {% else %}
             0
             {% endif %}
             + row_number() over (order by source_record_id)
-        )::integer                                      as customer_key,
-        (current_row_version + 1)::integer              as row_version,
+        ) as int)                                      as customer_key,
+        cast((current_row_version + 1) as int)              as row_version,
         c.*
     from changed c
 ),
@@ -143,43 +138,43 @@ final as (
         record_hash,
         source_system,
         source_record_id,
-        '{{ gold_batch_id() }}'::varchar(50) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
-        current_timestamp::timestamp    as etl_load_timestamp,
-        current_timestamp::timestamp    as etl_updated_timestamp,
+        cast('{{ gold_batch_id() }}' as string) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
+        cast(current_timestamp() as timestamp)    as etl_load_timestamp,
+        cast(current_timestamp() as timestamp)    as etl_updated_timestamp,
         -- Effective date (audit HIGH-3), never the load date. The source carries only
         -- current state (no pre-load history), so the INITIAL version is effective
-        -- from a low-watermark — it covers every fact that predates the first real
+        -- from a low-watermark â€” it covers every fact that predates the first real
         -- change. A NEW version (a change detected after go-live) is effective from
         -- the source UPDATE instant. Windows are half-open [valid_from, valid_to).
         (case when row_version = 1
               then date '1900-01-01'
-              else src_updated_at::date
+              else cast(src_updated_at as date)
          end)                           as valid_from,
-        null::date                      as valid_to,      -- open version (closed by post-hook)
+        cast(null as date)                      as valid_to,      -- open version (closed by post-hook)
         true                            as is_current,
         row_version,
         true                            as is_complete,
         false                           as is_validated,
         false                           as dq_issue_flag,
-        null::varchar(500)              as dq_issue_description,
+        cast(null as string)              as dq_issue_description,
         is_deleted,
-        null::timestamp                 as deleted_timestamp
+        cast(null as timestamp)                 as deleted_timestamp
     from keyed
 )
 
 select * from final
 
 {% if not is_incremental() %}
--- -1 "Not Provided" member (ADR-011) — first build only, so the append never
+-- -1 "Not Provided" member (ADR-011) â€” first build only, so the append never
 -- duplicates it.
 union all
 select
-    -1::integer, 'Not Provided'::varchar(30), 'Not Provided'::varchar(100),
-    'Not Provided'::varchar(200), 'Not Provided'::varchar(100),
-    'Not Provided'::varchar(100), 'Not Provided'::varchar(50),
-    'Not Provided'::varchar(150), -1::integer,
-    null::char(64), 'system'::varchar(50), '-1'::varchar(100), null::varchar(50),
-    current_timestamp::timestamp, current_timestamp::timestamp,
-    date '1900-01-01', null::date, true, 1,   -- -1 member: open-ended sentinel window
-    true, false, false, null::varchar(500), false, null::timestamp
+    -cast(1 as int), cast('Not Provided' as string), cast('Not Provided' as string),
+    cast('Not Provided' as string), cast('Not Provided' as string),
+    cast('Not Provided' as string), cast('Not Provided' as string),
+    cast('Not Provided' as string), -cast(1 as int),
+    cast(null as string), cast('system' as string), cast('-1' as string), cast(null as string),
+    cast(current_timestamp() as timestamp), cast(current_timestamp() as timestamp),
+    date '1900-01-01', cast(null as date), true, 1,   -- -1 member: open-ended sentinel window
+    true, false, false, cast(null as string), false, cast(null as timestamp)
 {% endif %}

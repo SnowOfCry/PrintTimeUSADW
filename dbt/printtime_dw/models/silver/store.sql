@@ -45,18 +45,18 @@ cleaned as (
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Names/address/region: trim + collapse internal spaces. Codes keep
         -- source case; state_code upper-cased; phone reduced to digits only.
-        store_id::bigint                                                                as silver_store_id,
-        nullif(trim(store_code), '')::varchar(30)                                       as silver_store_code,
-        nullif(regexp_replace(trim(store_name),      '\s+', ' ', 'g'), '')::varchar(100)   as silver_store_name,
-        nullif(regexp_replace(trim(street_address),  '\s+', ' ', 'g'), '')::varchar(200)   as silver_street_address,
-        nullif(regexp_replace(trim(city),            '\s+', ' ', 'g'), '')::varchar(100)   as silver_city,
-        nullif(upper(trim(state_code)), '')::varchar(2)                                  as silver_state_code,
-        nullif(trim(zip_code), '')::varchar(10)                                          as silver_zip_code,
-        nullif(regexp_replace(phone, '[^0-9]', '', 'g'), '')::varchar(50)                as silver_phone_number,
-        nullif(regexp_replace(trim(region),          '\s+', ' ', 'g'), '')::varchar(50)    as silver_region,
-        nullif(trim(store_type), '')::varchar(50)                                        as silver_store_type,
-        open_date::date                                                                 as silver_open_date,
-        is_active_flag::boolean                                                          as silver_is_active_flag,
+        cast(store_id as bigint)                                                                as silver_store_id,
+        cast(nullif(trim(store_code), '') as string)                                       as silver_store_code,
+        cast(nullif(regexp_replace(trim(store_name),      '\\s+', ' '), '') as string)   as silver_store_name,
+        cast(nullif(regexp_replace(trim(street_address),  '\\s+', ' '), '') as string)   as silver_street_address,
+        cast(nullif(regexp_replace(trim(city),            '\\s+', ' '), '') as string)   as silver_city,
+        cast(nullif(upper(trim(state_code)), '') as string)                                  as silver_state_code,
+        cast(nullif(trim(zip_code), '') as string)                                          as silver_zip_code,
+        cast(nullif(regexp_replace(phone, '[^0-9]', ''), '') as string)                as silver_phone_number,
+        cast(nullif(regexp_replace(trim(region),          '\\s+', ' '), '') as string)    as silver_region,
+        cast(nullif(trim(store_type), '') as string)                                        as silver_store_type,
+        cast(open_date as date)                                                                 as silver_open_date,
+        cast(is_active_flag as boolean)                                                          as silver_is_active_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='store_id') }}
 
@@ -71,9 +71,9 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_store_id::text,
+                cast(silver_store_id as string),
                 coalesce(silver_store_code, ''),
                 coalesce(silver_store_name, ''),
                 coalesce(silver_street_address, ''),
@@ -83,10 +83,10 @@ final as (
                 coalesce(silver_phone_number, ''),
                 coalesce(silver_region, ''),
                 coalesce(silver_store_type, ''),
-                coalesce(silver_open_date::text, ''),
-                coalesce(silver_is_active_flag::text, '')
+                coalesce(cast(silver_open_date as string), ''),
+                coalesce(cast(silver_is_active_flag as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

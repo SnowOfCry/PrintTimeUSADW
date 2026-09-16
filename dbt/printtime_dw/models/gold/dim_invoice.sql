@@ -1,20 +1,20 @@
 -- =============================================================================
 -- gold.dim_invoice
--- Type:    SCD Type 2 dimension (versioned history) — the ADR-015 pattern.
+-- Type:    SCD Type 2 dimension (versioned history) â€” the ADR-015 pattern.
 -- Grain:   one row per invoice VERSION (current version: is_current = true).
 -- Source:  silver.invoice; lookups: silver.customer, silver.store
 -- Spec:    sql/gold/002_create_gold_tables.sql (gold.dim_invoice)
---          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md §8
+--          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md Â§8
 --          ADR-007 (Type 2), ADR-015 (SCD2 pattern), ADR-011 (-1 member)
 --
 -- Notes specific to this dim:
---   * STANDARD Type 2 from silver.invoice (gold decision #2) — deliberately NOT
+--   * STANDARD Type 2 from silver.invoice (gold decision #2) â€” deliberately NOT
 --     rebuilt from silver.invoice_status_history, which records status timing but
 --     cannot reconstruct historical totals. That history table stays the
 --     authoritative source for exact status-duration analysis (backlog #11).
 --   * The most volatile dimension: the open -> partial -> paid/void lifecycle and
 --     the running total/paid amounts mean invoices version more than any other
---     dim. Fidelity is bounded by gold run frequency (ADR-007) — a daily run
+--     dim. Fidelity is bounded by gold run frequency (ADR-007) â€” a daily run
 --     captures the days-to-weeks lifecycle in practice.
 --   * po_number added during the gold build (backlog #10): 30% of invoices carry
 --     a customer PO, and BI needs to group payments by it.
@@ -26,16 +26,12 @@
     materialized='incremental',
     incremental_strategy='append',
     on_schema_change='fail',
-    indexes=[
-        {'columns': ['invoice_number', 'is_current']},
-        {'columns': ['valid_from', 'valid_to']},
-    ],
     post_hook=[
         "
         update {{ this }} d
         set    is_current            = false,
                valid_to              = nv.valid_from,
-               etl_updated_timestamp = current_timestamp
+               etl_updated_timestamp = current_timestamp()
         from   {{ this }} nv
         where  nv.source_record_id = d.source_record_id
           and  nv.row_version      = d.row_version + 1
@@ -48,35 +44,35 @@
 -- 1) Read silver and denormalize the customer + store descriptors.
 with staged as (
     select
-        i.silver_invoice_id::varchar(100)                       as source_record_id,
-        i.silver_invoice_number::varchar(30)                    as invoice_number,
-        i.silver_po_number::varchar(50)                         as po_number,
-        i.silver_invoice_date::date                             as invoice_date,
-        i.silver_invoice_status::varchar(20)                    as invoice_status,
-        i.silver_total_amount::numeric(12,2)                    as invoice_total,
-        c.silver_customer_account_no::varchar(30)               as customer_id,
-        c.silver_customer_name::varchar(100)                    as customer_name,
-        s.silver_store_code::varchar(30)                        as store_id,
-        s.silver_store_name::varchar(100)                       as store_name,
-        i.silver_is_deleted_flag::boolean                       as is_deleted,
-        i.silver_source_system::varchar(50)                     as source_system,
+        cast(i.silver_invoice_id as string)                       as source_record_id,
+        cast(i.silver_invoice_number as string)                    as invoice_number,
+        cast(i.silver_po_number as string)                         as po_number,
+        cast(i.silver_invoice_date as date)                             as invoice_date,
+        cast(i.silver_invoice_status as string)                    as invoice_status,
+        cast(i.silver_total_amount as decimal(12,2))                    as invoice_total,
+        cast(c.silver_customer_account_no as string)               as customer_id,
+        cast(c.silver_customer_name as string)                    as customer_name,
+        cast(s.silver_store_code as string)                        as store_id,
+        cast(s.silver_store_name as string)                       as store_name,
+        cast(i.silver_is_deleted_flag as boolean)                       as is_deleted,
+        cast(i.silver_source_system as string)                     as source_system,
         -- Effective-dating input (audit HIGH-3): a new version is dated by the
         -- source update instant, not the load date.
         i.silver_source_updated_at_timestamp                    as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: status and total changes are
         -- what drive new versions here.
-        encode(digest(concat_ws('|',
+        cast(encode(digest(concat_ws('|',
             coalesce(i.silver_invoice_number, ''),
             coalesce(i.silver_po_number, ''),
-            coalesce(i.silver_invoice_date::text, ''),
+            coalesce(cast(i.silver_invoice_date as string), ''),
             coalesce(i.silver_invoice_status, ''),
-            coalesce(i.silver_total_amount::text, ''),
+            coalesce(cast(i.silver_total_amount as string), ''),
             coalesce(c.silver_customer_account_no, ''),
             coalesce(c.silver_customer_name, ''),
             coalesce(s.silver_store_code, ''),
             coalesce(s.silver_store_name, ''),
-            coalesce(i.silver_is_deleted_flag::text, '')
-        ), 'sha256'), 'hex')::char(64)                          as record_hash
+            coalesce(cast(i.silver_is_deleted_flag as string), '')
+        ), 'sha256'), 'hex') as string)                          as record_hash
     from {{ ref('invoice') }} i
     left join {{ ref('customer') }} c
            on c.silver_customer_id = i.silver_customer_id
@@ -92,7 +88,7 @@ changed as (
         {% if is_incremental() %}
         , coalesce(c.row_version, 0) as current_row_version
         {% else %}
-        , 0::integer    as current_row_version
+        , cast(0 as int)    as current_row_version
         {% endif %}
     from staged s
     {% if is_incremental() %}
@@ -108,15 +104,15 @@ changed as (
 --    so it gets a fresh key = (highest key so far) + its position.
 keyed as (
     select
-        (
+        cast((
             {% if is_incremental() %}
             (select coalesce(max(invoice_key), 0) from {{ this }} where invoice_key <> -1)
             {% else %}
             0
             {% endif %}
             + row_number() over (order by source_record_id)
-        )::integer                                      as invoice_key,
-        (current_row_version + 1)::integer              as row_version,
+        ) as int)                                      as invoice_key,
+        cast((current_row_version + 1) as int)              as row_version,
         c.*
     from changed c
 ),
@@ -136,40 +132,40 @@ final as (
         record_hash,
         source_system,
         source_record_id,
-        '{{ gold_batch_id() }}'::varchar(50) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
-        current_timestamp::timestamp    as etl_load_timestamp,
-        current_timestamp::timestamp    as etl_updated_timestamp,
+        cast('{{ gold_batch_id() }}' as string) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
+        cast(current_timestamp() as timestamp)    as etl_load_timestamp,
+        cast(current_timestamp() as timestamp)    as etl_updated_timestamp,
         -- Effective date (audit HIGH-3): initial version from a low-watermark;
         -- later versions from the source update instant. Never the load date.
         (case when row_version = 1
               then date '1900-01-01'
-              else src_updated_at::date
+              else cast(src_updated_at as date)
          end)                           as valid_from,
-        null::date                      as valid_to,      -- open version
+        cast(null as date)                      as valid_to,      -- open version
         true                            as is_current,
         row_version,
         true                            as is_complete,
         false                           as is_validated,
         false                           as dq_issue_flag,
-        null::varchar(500)              as dq_issue_description,
+        cast(null as string)              as dq_issue_description,
         is_deleted,
-        null::timestamp                 as deleted_timestamp
+        cast(null as timestamp)                 as deleted_timestamp
     from keyed
 )
 
 select * from final
 
 {% if not is_incremental() %}
--- -1 "Not Provided" member (ADR-011) — first build only, so the append never
+-- -1 "Not Provided" member (ADR-011) â€” first build only, so the append never
 -- duplicates it.
 union all
 select
-    -1::integer, 'Not Provided'::varchar(30), 'Not Provided'::varchar(50),
-    null::date, 'Not Provided'::varchar(20), null::numeric(12,2),
-    'Not Provided'::varchar(30), 'Not Provided'::varchar(100),
-    'Not Provided'::varchar(30), 'Not Provided'::varchar(100),
-    null::char(64), 'system'::varchar(50), '-1'::varchar(100), null::varchar(50),
-    current_timestamp::timestamp, current_timestamp::timestamp,
-    date '1900-01-01', null::date, true, 1,   -- -1 member: open-ended sentinel window
-    true, false, false, null::varchar(500), false, null::timestamp
+    -cast(1 as int), cast('Not Provided' as string), cast('Not Provided' as string),
+    cast(null as date), cast('Not Provided' as string), cast(null as decimal(12,2)),
+    cast('Not Provided' as string), cast('Not Provided' as string),
+    cast('Not Provided' as string), cast('Not Provided' as string),
+    cast(null as string), cast('system' as string), cast('-1' as string), cast(null as string),
+    cast(current_timestamp() as timestamp), cast(current_timestamp() as timestamp),
+    date '1900-01-01', cast(null as date), true, 1,   -- -1 member: open-ended sentinel window
+    true, false, false, cast(null as string), false, cast(null as timestamp)
 {% endif %}

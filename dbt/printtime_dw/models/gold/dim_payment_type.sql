@@ -14,33 +14,30 @@
     unique_key='payment_type_key',
     incremental_strategy='merge',
     merge_exclude_columns=['etl_load_timestamp'],
-    on_schema_change='fail',
-    indexes=[
-        {'columns': ['type_code']},
-    ]
+    on_schema_change='fail'
 ) }}
 
 with staged as (           -- read silver, map/clean the business columns
     select
         silver_type_code                                        as type_code,
-        nullif(trim(silver_type_name), '')::varchar(50)         as type_name,
-        nullif(trim(silver_type_description), '')::varchar(200) as description,
-        silver_is_deleted_flag::boolean                         as is_deleted
+        cast(nullif(trim(silver_type_name), '') as string)         as type_name,
+        cast(nullif(trim(silver_type_description), '') as string) as description,
+        cast(silver_is_deleted_flag as boolean)                         as is_deleted
     from {{ ref('payment_type') }}
 ),
 
 keyed as (                 -- assign the surrogate key (existing reused, new = max+offset)
     select
         {% if is_incremental() %}
-        coalesce(
-            e.payment_type_key,                          -- existing type → reuse its key
-            (select coalesce(max(payment_type_key), 0)   -- new type → highest key so far …
+        cast(coalesce(
+            e.payment_type_key,                          -- existing type â†’ reuse its key
+            (select coalesce(max(payment_type_key), 0)   -- new type â†’ highest key so far â€¦
              from {{ this }} where payment_type_key <> -1)
-            + sum(case when e.payment_type_key is null then 1 else 0 end)  -- … + running count of new rows
+            + sum(case when e.payment_type_key is null then 1 else 0 end)  -- â€¦ + running count of new rows
               over (order by s.type_code)
-        )::integer
+        ) as int)
         {% else %}
-        (row_number() over (order by s.type_code))::integer          -- first build → 1,2,3,…
+        cast((row_number() over (order by s.type_code)) as int)          -- first build â†’ 1,2,3,â€¦
         {% endif %} as payment_type_key,
         s.type_code,
         s.type_name,
@@ -58,8 +55,8 @@ final as (                 -- add the etl timestamps
         type_code,
         type_name,
         description,
-        current_timestamp::timestamp as etl_load_timestamp,
-        current_timestamp::timestamp as etl_updated_timestamp,
+        cast(current_timestamp() as timestamp) as etl_load_timestamp,
+        cast(current_timestamp() as timestamp) as etl_updated_timestamp,
         is_deleted
     from keyed
 )
@@ -68,10 +65,10 @@ select * from final
 union all
 -- -1 "Not Provided" member (ADR-011): flows through the same merge; key stays -1.
 select
-    -1::integer,
-    'Not Provided'::varchar(20),
-    'Not Provided'::varchar(50),
-    'Not Provided'::varchar(200),
-    current_timestamp::timestamp,
-    current_timestamp::timestamp,
+    -cast(1 as int),
+    cast('Not Provided' as string),
+    cast('Not Provided' as string),
+    cast('Not Provided' as string),
+    cast(current_timestamp() as timestamp),
+    cast(current_timestamp() as timestamp),
     false

@@ -1,15 +1,15 @@
 -- =============================================================================
 -- gold.fact_customer_behavior_snapshot
--- Type:    PERIODIC SNAPSHOT fact — append-only; prior snapshots are immutable.
+-- Type:    PERIODIC SNAPSHOT fact â€” append-only; prior snapshots are immutable.
 -- Grain:   one row per CUSTOMER per SNAPSHOT DATE.
 -- Source:  silver.customer + aggregates over silver.invoice / silver.payment
 -- Spec:    sql/gold/002_create_gold_tables.sql (gold.fact_customer_behavior_snapshot)
---          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md §11
+--          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md Â§11
 --          ADR-007 (periodic snapshot), ADR-011 (-1 fallback),
 --          gold decision #4 (monthly, month-end cadence)
 --
 -- Cadence (decision #4): MONTHLY at month-end (~10k rows/month, ~120k/year).
---   The snapshot date defaults to the most recently COMPLETED month-end — you
+--   The snapshot date defaults to the most recently COMPLETED month-end â€” you
 --   never snapshot a month still in progress. Override for backfills with:
 --     dbt run --select fact_customer_behavior_snapshot --vars '{snapshot_date: 2025-11-30}'
 --
@@ -22,12 +22,7 @@
 {{ config(
     materialized='incremental',
     incremental_strategy='append',
-    on_schema_change='fail',
-    indexes=[
-        {'columns': ['snapshot_date_key']},
-        {'columns': ['customer_key']},
-        {'columns': ['last_order_date_key']},
-    ]
+    on_schema_change='fail'
 ) }}
 
 {% set snapshot_date = var('snapshot_date', none) %}
@@ -38,7 +33,7 @@ with snapshot_param as (
         {% if snapshot_date %}
         date '{{ snapshot_date }}'                                   as snapshot_date
         {% else %}
-        (date_trunc('month', current_date) - interval '1 day')::date as snapshot_date
+        cast(last_day(add_months(current_date(), -1)) as date) as snapshot_date
         {% endif %}
 ),
 
@@ -46,14 +41,14 @@ with snapshot_param as (
 invoice_agg as (
     select
         i.silver_customer_id,
-        count(distinct i.silver_invoice_id)::integer                          as lifetime_order_count,
-        sum(i.silver_total_amount)::numeric(14,2)                             as lifetime_sales_amount,
-        count(*) FILTER (
-            where i.silver_invoice_date > sp.snapshot_date - interval '30 days'
-        )::integer                                                            as orders_last_30_days,
-        count(*) FILTER (where i.silver_balance_due_amount > 0)::integer      as open_invoice_count,
-        coalesce(sum(i.silver_balance_due_amount)
-                 FILTER (where i.silver_balance_due_amount > 0), 0)::numeric(14,2)
+        cast(count(distinct i.silver_invoice_id) as int)                          as lifetime_order_count,
+        cast(sum(i.silver_total_amount) as decimal(14,2))                             as lifetime_sales_amount,
+        cast(count(*) FILTER (
+            where i.silver_invoice_date > date_sub(sp.snapshot_date, 30)
+        ) as int)                                                            as orders_last_30_days,
+        cast(count(*) FILTER (where i.silver_balance_due_amount > 0) as int)      as open_invoice_count,
+        cast(coalesce(sum(i.silver_balance_due_amount)
+                 FILTER (where i.silver_balance_due_amount > 0), 0) as decimal(14,2))
                                                                               as open_invoice_total,
         max(i.silver_invoice_date)                                            as last_order_date
     from {{ ref('invoice') }} i
@@ -66,7 +61,7 @@ invoice_agg as (
 payment_speed as (
     select
         i.silver_customer_id,
-        avg(lp.last_payment_date - i.silver_invoice_date)::numeric(8,2)       as avg_days_to_full_payment
+        cast(avg(datediff(lp.last_payment_date, i.silver_invoice_date)) as decimal(8,2))       as avg_days_to_full_payment
     from {{ ref('invoice') }} i
     cross join snapshot_param sp
     join (
@@ -83,19 +78,19 @@ payment_speed as (
 -- 4) One row per customer, with the dimension keys resolved (unmatched -> -1).
 final as (
     select
-        coalesce(dd_snap.date_key, -1)::integer                               as snapshot_date_key,
-        coalesce(dc.customer_key,  -1)::integer                               as customer_key,
-        coalesce(dd_last.date_key, -1)::integer                               as last_order_date_key,
-        coalesce(ia.lifetime_order_count, 0)::integer                         as lifetime_order_count,
-        coalesce(ia.lifetime_sales_amount, 0)::numeric(14,2)                  as lifetime_sales_amount,
-        coalesce(ia.orders_last_30_days, 0)::integer                          as orders_last_30_days,
-        ps.avg_days_to_full_payment::numeric(8,2)                             as avg_days_to_full_payment,
-        coalesce(ia.open_invoice_count, 0)::integer                           as open_invoice_count,
-        coalesce(ia.open_invoice_total, 0)::numeric(14,2)                     as open_invoice_total,
-        c.silver_is_active_flag::boolean                                      as is_active_customer,
-        c.silver_customer_status::varchar(20)                                 as customer_status,
-        c.silver_source_system::varchar(50)                                   as source_system,
-        c.silver_customer_id::varchar(100)                                    as source_record_id
+        cast(coalesce(dd_snap.date_key, -1) as int)                               as snapshot_date_key,
+        cast(coalesce(dc.customer_key,  -1) as int)                               as customer_key,
+        cast(coalesce(dd_last.date_key, -1) as int)                               as last_order_date_key,
+        cast(coalesce(ia.lifetime_order_count, 0) as int)                         as lifetime_order_count,
+        cast(coalesce(ia.lifetime_sales_amount, 0) as decimal(14,2))                  as lifetime_sales_amount,
+        cast(coalesce(ia.orders_last_30_days, 0) as int)                          as orders_last_30_days,
+        cast(ps.avg_days_to_full_payment as decimal(8,2))                             as avg_days_to_full_payment,
+        cast(coalesce(ia.open_invoice_count, 0) as int)                           as open_invoice_count,
+        cast(coalesce(ia.open_invoice_total, 0) as decimal(14,2))                     as open_invoice_total,
+        cast(c.silver_is_active_flag as boolean)                                      as is_active_customer,
+        cast(c.silver_customer_status as string)                                 as customer_status,
+        cast(c.silver_source_system as string)                                   as source_system,
+        cast(c.silver_customer_id as string)                                    as source_record_id
     from {{ ref('customer') }} c
     cross join snapshot_param sp
     left join invoice_agg    ia      on ia.silver_customer_id = c.silver_customer_id
@@ -103,7 +98,7 @@ final as (
     -- SCD2 key by EFFECTIVE DATE (audit HIGH-3): the customer version in effect on
     -- the snapshot date, so a past snapshot reflects who they were THEN, not now.
     left join {{ ref('dim_customer') }} dc
-           on dc.source_record_id = c.silver_customer_id::varchar
+           on dc.source_record_id = cast(c.silver_customer_id as string)
           and sp.snapshot_date >= dc.valid_from and (sp.snapshot_date < dc.valid_to or dc.valid_to is null)
     left join {{ ref('dim_date') }} dd_snap on dd_snap.date = sp.snapshot_date
     left join {{ ref('dim_date') }} dd_last on dd_last.date = ia.last_order_date
@@ -119,14 +114,14 @@ final as (
 -- 5) dbt-managed surrogate key (decision #7), continuing from the current max.
 keyed as (
     select
-        (
+        cast((
             {% if is_incremental() %}
             (select coalesce(max(snapshot_key), 0) from {{ this }})
             {% else %}
             0
             {% endif %}
-            + row_number() over (order by source_record_id::bigint)
-        )::integer                                      as snapshot_key,
+            + row_number() over (order by cast(source_record_id as bigint))
+        ) as int)                                      as snapshot_key,
         f.*
     from final f
 )
@@ -146,11 +141,11 @@ select
     customer_status,
     source_system,
     source_record_id,
-    '{{ gold_batch_id() }}'::varchar(50) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
-    current_timestamp::timestamp    as etl_load_timestamp,
-    current_timestamp::timestamp    as etl_updated_timestamp,
+    cast('{{ gold_batch_id() }}' as string) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
+    cast(current_timestamp() as timestamp)    as etl_load_timestamp,
+    cast(current_timestamp() as timestamp)    as etl_updated_timestamp,
     true                            as is_complete,
     false                           as is_validated,
     false                           as dq_issue_flag,
-    null::varchar(500)              as dq_issue_description
+    cast(null as string)              as dq_issue_description
 from keyed

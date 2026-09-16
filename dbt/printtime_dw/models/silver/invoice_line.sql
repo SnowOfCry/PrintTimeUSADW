@@ -44,18 +44,18 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Description/color: trim + collapse internal spaces, preserve case.
-        invoice_line_id::bigint                                                          as silver_invoice_line_id,
-        invoice_id::bigint                                                               as silver_invoice_id,
-        line_number::smallint                                                            as silver_line_number,
-        product_id::bigint                                                               as silver_product_id,
-        variant_id::bigint                                                               as silver_variant_id,
-        nullif(regexp_replace(trim(line_description), '\s+', ' ', 'g'), '')::varchar(300) as silver_line_description,
-        nullif(regexp_replace(trim(color),            '\s+', ' ', 'g'), '')::varchar(40)  as silver_color,
-        order_qty::integer                                                               as silver_order_qty,
-        unit_price_amount::numeric(18,2)                                                 as silver_unit_price_amount,
-        unit_cost_amount::numeric(18,2)                                                  as silver_unit_cost_amount,
-        discount_amount::numeric(18,2)                                                   as silver_discount_amount,
-        line_total_amount::numeric(18,2)                                                 as silver_line_total_amount,
+        cast(invoice_line_id as bigint)                                                          as silver_invoice_line_id,
+        cast(invoice_id as bigint)                                                               as silver_invoice_id,
+        cast(line_number as smallint)                                                            as silver_line_number,
+        cast(product_id as bigint)                                                               as silver_product_id,
+        cast(variant_id as bigint)                                                               as silver_variant_id,
+        cast(nullif(regexp_replace(trim(line_description), '\\s+', ' '), '') as string) as silver_line_description,
+        cast(nullif(regexp_replace(trim(color),            '\\s+', ' '), '') as string)  as silver_color,
+        cast(order_qty as int)                                                               as silver_order_qty,
+        cast(unit_price_amount as decimal(18,2))                                                 as silver_unit_price_amount,
+        cast(unit_cost_amount as decimal(18,2))                                                  as silver_unit_cost_amount,
+        cast(discount_amount as decimal(18,2))                                                   as silver_discount_amount,
+        cast(line_total_amount as decimal(18,2))                                                 as silver_line_total_amount,
 
         {{ silver_lineage_and_metadata(source_record_id='invoice_line_id') }}
 
@@ -70,22 +70,22 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_invoice_line_id::text,
-                coalesce(silver_invoice_id::text, ''),
-                coalesce(silver_line_number::text, ''),
-                coalesce(silver_product_id::text, ''),
-                coalesce(silver_variant_id::text, ''),
+                cast(silver_invoice_line_id as string),
+                coalesce(cast(silver_invoice_id as string), ''),
+                coalesce(cast(silver_line_number as string), ''),
+                coalesce(cast(silver_product_id as string), ''),
+                coalesce(cast(silver_variant_id as string), ''),
                 coalesce(silver_line_description, ''),
                 coalesce(silver_color, ''),
-                coalesce(silver_order_qty::text, ''),
-                coalesce(silver_unit_price_amount::text, ''),
-                coalesce(silver_unit_cost_amount::text, ''),
-                coalesce(silver_discount_amount::text, ''),
-                coalesce(silver_line_total_amount::text, '')
+                coalesce(cast(silver_order_qty as string), ''),
+                coalesce(cast(silver_unit_price_amount as string), ''),
+                coalesce(cast(silver_unit_cost_amount as string), ''),
+                coalesce(cast(silver_discount_amount as string), ''),
+                coalesce(cast(silver_line_total_amount as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

@@ -42,8 +42,8 @@ cleaned as (
 
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
-        upper(trim(state_code))::varchar(2)        as silver_state_code,
-        nullif(trim(state_name), '')::varchar(50)  as silver_state_name,
+        cast(upper(trim(state_code)) as string)        as silver_state_code,
+        cast(nullif(trim(state_name), '') as string)  as silver_state_name,
 
         {{ silver_lineage_and_metadata(source_record_id='state_code') }}
 
@@ -58,12 +58,12 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
                 silver_state_code,
                 coalesce(silver_state_name, '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

@@ -89,6 +89,45 @@ and exactly how each was fixed. Kept for future-me, teammates, and interviews.
 - **Fix:** None needed — informational. (Data-quality enforcement moves to dbt tests: `unique`, `not_null`.)
 - **Lesson:** Not every warning is a problem. On Databricks, **tests replace enforced constraints** for uniqueness/not-null guarantees.
 
+### 12. Automating the cast port — and its two parser traps
+- **Symptom:** Hand-porting 48 models (hundreds of `::` casts) is too slow and error-prone.
+- **Cause:** Postgres `expr::type` has no Spark equivalent; every one needs `cast(expr as type)`.
+- **Fix:** Wrote a Python cast-boundary parser (`scratchpad/port_pg_to_databricks.py`) that walks left from each `::` to find the operand (balancing parens, and extending `end` back to its matching `case`), then rewrites to `cast(... as <mapped type>)`. Also drops the `regexp_replace` `'g'` flag, doubles regex backslashes, and fixes `now()`/`current_*`.
+- **Traps it hit (both fixed):**
+  1. Paramless types (`::bigint`) greedily ate trailing whitespace → `)as` instead of `) as`. Fix: move `\s*` **inside** the optional `(params)` group in the type regex.
+  2. `count(*) FILTER (...)::int` — the parser grabbed only the `(...)` and the word `FILTER`, producing broken `FILTER cast((...))`. Fix: hand-corrected the 2 affected lines to `cast(count(*) FILTER (...) as int)`.
+- **Lesson:** Automate the mechanical 95%, but **always** grep the output for the constructs a naive parser mishandles (`FILTER cast(`, `cast((where`, unbalanced results) and eyeball the densest file before trusting it.
+
+### 13. `Cannot resolve routine 'digest'` (UNRESOLVED_ROUTINE)
+- **Symptom:** SCD2 dims failed: `Cannot resolve routine 'digest'`.
+- **Cause:** Postgres hashed with pgcrypto: `encode(digest(concat_ws('|', ...), 'sha256'), 'hex')`. Databricks has no `digest`/`encode`.
+- **Fix:** `encode(digest(X, 'sha256'), 'hex')` → `sha2(X, 256)` (returns the hex string directly).
+- **Lesson:** Postgres crypto/encoding funcs don't exist on Databricks. Map: `digest+encode` → `sha2`; `md5` stays `md5`.
+
+### 14. `UPDATE ... FROM` not supported (SCD2 close-out)
+- **Symptom:** `PARSE_SYNTAX_ERROR ... at or near 'from'` in the SCD2 dims' `post_hook`.
+- **Cause:** The post-hook closed the previous current version with a Postgres join-update: `update {{ this }} d set is_current=false, valid_to=nv.valid_from from {{ this }} nv where ...`. Spark SQL has **no `UPDATE ... FROM`**.
+- **Fix:** Rewrote each as `MERGE INTO {{ this }} d USING {{ this }} nv ON <conds> WHEN MATCHED THEN UPDATE SET ...`.
+- **Lesson:** Any Postgres update/delete that joins another table becomes a Databricks **`MERGE INTO`**. This is the single most common SCD2 porting change.
+
+### 15. `date - date` returns an INTERVAL, not INT days
+- **Symptom:** `DATATYPE_MISMATCH.BINARY_OP_DIFF_TYPES: "((date - date) > 90)" ... "INTERVAL DAY" and "INT"`.
+- **Cause:** In Postgres `date - date` = integer days; in **Spark it returns an interval**, so comparing to/averaging an int fails.
+- **Fix:** `a_date - b_date` → `datediff(a_date, b_date)` (int days). Found via `grep` for `.date -` / `_date -` across all models.
+- **Lesson:** Never leave bare date arithmetic. `date - date` → `datediff()`; `date - N` → `date_sub(date, N)`; `date + N` → `date_add(date, N)`; `x - interval '1 day'` → `date_sub`/`add_months`/`last_day`.
+
+### 16. Postgres `indexes=` config unsupported
+- **Symptom:** N/A directly — dbt-databricks ignores/rejects the postgres-only `indexes=[...]` model config.
+- **Cause:** `{{ config(materialized='table', indexes=[{'columns':['x']}]) }}` is a dbt-postgres feature. Delta clusters/optimizes differently.
+- **Fix:** Removed `indexes=[...]` from the 10 gold configs (bracket-balanced removal — a naive `\[.*?\]` regex stops at the **inner** `]` and corrupts the config).
+- **Lesson:** Adapter-specific configs don't carry over. Remove `indexes`; if you need clustering later, use Delta `CLUSTER BY`/`OPTIMIZE`.
+
+### 17. Driving dbt from a script (avoiding the Git Bash 404)
+- **Symptom:** Need to run dbt repeatedly to iterate, but Git Bash mangles `http_path` (entry #8).
+- **Cause:** MSYS path conversion rewrites the `/sql/...` env var.
+- **Fix:** Ran dbt via a tiny Python runner (`scratchpad/run_dbt.py`) that loads `.env` with `python-dotenv` and `subprocess.run(["dbt", ...], env=...)` — Python sets the env string verbatim, no MSYS. Same trick (`databricks-sql-connector` in `exec_sql.py`) ran the bronze DDL directly.
+- **Lesson:** When a shell corrupts your inputs, drive the tool from Python where the strings are passed verbatim. cmd/PowerShell work too.
+
 ---
 
 ## SQL dialect translation cheat-sheet (Postgres → Databricks)
@@ -103,8 +142,20 @@ The mechanical core of the migration. Same patterns repeat across all 49 models.
 | `current_timestamp::timestamp` | `current_timestamp()` | Parentheses required |
 | `md5(...)::text` | `cast(md5(...) as string)` | |
 | YAML `data_type: text` / `varchar(n)` | `data_type: string` | **Contracts carry dialect too** |
-| `initcap`, `nullif`, `coalesce`, `concat_ws`, `is distinct from`, `nulls last`, `row_number() over` | identical | No change needed |
-| incremental `merge`, snapshots (SCD2) | supported on Delta | No change needed |
+| `numeric(p,s)` | `decimal(p,s)` | Precision preserved |
+| `encode(digest(x,'sha256'),'hex')` | `sha2(x, 256)` | pgcrypto has no equivalent |
+| `date_a - date_b` | `datediff(date_a, date_b)` | Spark subtraction = interval, not int |
+| `date - N` / `date + N` | `date_sub(date,N)` / `date_add(date,N)` | |
+| `x - interval '1 day'` | `date_sub(x,1)` / `last_day(add_months(x,-1))` | |
+| `generate_series(a,b,interval '1 day')` | `explode(sequence(a, b, interval 1 day))` | date spine |
+| `to_char(d,'FMMonth'/'YYYY-MM')` | `date_format(d,'MMMM'/'yyyy-MM')` | format tokens differ |
+| `date_trunc('month',d)+interval '1 month -1 day'` | `last_day(d)` | |
+| `extract(dow from d)` (0=Sun) | `dayofweek(d) - 1` | Spark dayofweek is 1=Sun |
+| `UPDATE t d SET ... FROM t nv WHERE ...` | `MERGE INTO t d USING t nv ON ... WHEN MATCHED THEN UPDATE SET ...` | no join-update in Spark |
+| `indexes=[...]` model config | *(remove)* | postgres-only dbt config |
+| Bronze DDL: `VARCHAR(n)`/`TEXT`/`JSONB`→`STRING`, `BIGSERIAL`→`BIGINT`, `INTEGER`→`INT` | | drop `DEFAULT`, `CONSTRAINT`, `COMMENT ON` |
+| `initcap`, `nullif`, `coalesce`, `concat_ws`, `is distinct from`, `nulls last`, `row_number() over`, `split_part`, `left`, `right`, `||`, `sha2`, `md5` | identical | No change needed |
+| incremental `merge`, SCD2 dims, `FILTER (where ...)` | supported on Delta | No change needed |
 
 ---
 
@@ -113,12 +164,13 @@ The mechanical core of the migration. Same patterns repeat across all 49 models.
 - [x] **M1** Sync local repo to GitHub `main`
 - [x] **M2** Collect Databricks connection values (host / http_path / token)
 - [x] **M3** Connect dbt → `dbt debug` passes
-- [x] **M4 (partial)** Port first model end-to-end: `silver.customer` builds ✅
-- [ ] **M4 (rest)** Port remaining silver + gold models (SQL + YAML contracts)
-- [ ] **M5** Load sample bronze for all sources
-- [ ] **M6** `dbt build` full project + tests; reconcile vs Postgres
+- [x] **M4** Port ALL 49 models + macros to Databricks dialect (SQL + contracts) ✅
+- [x] **M5** Create all 21 bronze tables in Unity Catalog ✅
+- [x] **M6a** Build silver (21/21 PASS) + gold (28/28 PASS) on Databricks ✅
+- [ ] **M6b** Load real sample data for all sources; run `dbt test`; reconcile vs Postgres
 - [ ] **M7** Unity Catalog grants + a Databricks Workflow
-- [ ] **M8** Decide → paid workspace + ADLS Gen2
+- [ ] **M8** Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs
+- [ ] **M9** Decide → paid workspace + ADLS Gen2
 
 ---
 

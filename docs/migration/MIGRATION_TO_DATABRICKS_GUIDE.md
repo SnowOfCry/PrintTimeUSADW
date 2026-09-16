@@ -238,15 +238,76 @@ repetition. We chose **`customer`** because it uses most of the tricky syntax.
 
 ---
 
+## Part 5 — Port the whole warehouse and build it
+
+With the pattern proven on one model, we scaled to all 49 — but automated the mechanical
+parts instead of hand-editing, and hit several *new* dialect issues that only one model
+(`customer`) hadn't exercised.
+
+### Step 5.1 — Automate the cast port
+- **What:** Wrote a Python script that converts `expr::type` → `cast(expr as type)` across
+  every model + macro, plus the regex/`now()` fixes.
+- **Why:** 48 files with hundreds of casts is too slow and risky by hand. A parser that
+  understands operand boundaries (balanced parens, `case…end`) does it reliably.
+- **How:** `scratchpad/port_pg_to_databricks.py` (kept for reference). It walks left from
+  each `::` to find the operand, then rewrites it. After running, we **grepped the output**
+  for constructs it can't handle and fixed those by hand — see 5.3.
+  > Two parser bugs we caught: paramless casts ate trailing spaces (`)as`), and
+  > `count(*) FILTER (...)::int` got mangled. Always verify automated edits.
+
+### Step 5.2 — Rewrite Postgres-only date logic (gold)
+- **What:** Hand-rewrote `gold/dim_date.sql` and `gold/fact_customer_behavior_snapshot.sql`.
+- **Why:** These use Postgres date functions with no 1:1 Spark cast.
+- **How (the key swaps):**
+  - `generate_series(a,b,interval '1 day')` → `explode(sequence(a, b, interval 1 day))`
+  - `to_char(d,'FMMonth')` → `date_format(d,'MMMM')`; `'YYYY-MM'` → `'yyyy-MM'`
+  - `date_trunc('month',d)+interval '1 month -1 day'` → `last_day(d)`
+  - `extract(dow from d)` (Postgres 0=Sun) → `dayofweek(d) - 1` (Spark 1=Sun)
+  - `date + n` → `date_add(d,n)`; `x - interval '1 day'` → `last_day(add_months(...,-1))`
+
+### Step 5.3 — Fix what the build surfaced (iterate)
+We built **layer by layer** and fixed each error the engine reported. Every fix is logged in
+[ERROR_AND_FIX_LOG.md](ERROR_AND_FIX_LOG.md) (entries 12–17). The new ones beyond `customer`:
+- **`digest()` unresolved** → SCD2 dims hashed with `encode(digest(x,'sha256'),'hex')`;
+  became `sha2(x, 256)`.
+- **`UPDATE ... FROM` syntax error** → SCD2 version-close post-hooks are Postgres join-updates;
+  Spark needs **`MERGE INTO`**. Rewrote all 6.
+- **`date - date` type mismatch** → Spark returns an interval, not int days; use `datediff()`.
+- **`indexes=[...]` config** → postgres-only; removed from 10 gold models.
+
+### Step 5.4 — Create the bronze tables in Databricks
+- **What:** Created all 21 bronze source tables in Unity Catalog.
+- **Why:** silver models read from bronze; the tables must exist. The source OLTP is offline,
+  so we build the tables empty (a couple seeded with sample rows) — enough to prove the whole
+  pipeline runs.
+- **How:** Translated the Postgres bronze DDL to Databricks types
+  (`sql/databricks_poc/bronze_tables_databricks.sql`: `VARCHAR/TEXT/JSONB`→`STRING`,
+  `BIGSERIAL`→`BIGINT`, dropped `DEFAULT`/`CONSTRAINT`/`COMMENT`), then ran it against the
+  warehouse.
+
+### Step 5.5 — Build silver, then gold
+- **What:** Built both layers on Databricks. Result: **silver 21/21 PASS, gold 28/28 PASS**.
+- **How:**
+  ```bash
+  # silver
+  dotenv run -- dbt run --select silver --target databricks --project-dir dbt/printtime_dw --profiles-dir dbt/printtime_dw --vars "{silver_batch_id: 1}"
+  # gold (facts need a per-target batch-id map; dims share 'gold.dimensions')
+  dotenv run -- dbt run --select gold --target databricks --project-dir dbt/printtime_dw --profiles-dir dbt/printtime_dw --vars "{gold_batch_ids: {gold.dimensions: 1, gold.fact_customer_behavior_snapshot: 1, gold.fact_payments: 1, gold.fact_retail_sales: 1}}"
+  ```
+- **Result:** **The entire warehouse — all 49 models — now builds natively on Databricks.** 🎉
+
+---
+
 ## Where we are
 
 - [x] Repo synced to GitHub, migration branch created
 - [x] Local tooling (Python, venv, dbt-databricks) installed
 - [x] dbt connected to Databricks (`dbt debug` passes)
-- [x] **First model migrated end-to-end: `silver.customer` builds on Databricks** ✅
-- [ ] Port the remaining silver + gold models (same patterns as Step 4.2–4.3)
-- [ ] Load sample bronze for all sources
-- [ ] Full `dbt build` + tests, reconcile against Postgres
+- [x] First model migrated end-to-end: `silver.customer`
+- [x] **ALL 49 models ported + building on Databricks (silver 21/21, gold 28/28)** ✅
+- [x] All 21 bronze tables created in Unity Catalog
+- [ ] Load real sample data for every source; run `dbt test`; reconcile against Postgres
+- [ ] Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs
 - [ ] Unity Catalog grants + a Databricks Workflow
 - [ ] Decide → paid Azure workspace + ADLS Gen2
 

@@ -22,15 +22,16 @@
     on_schema_change='fail',
     post_hook=[
         "
-        update {{ this }} d
-        set    is_current            = false,
-               valid_to              = nv.valid_from,
-               etl_updated_timestamp = current_timestamp()
-        from   {{ this }} nv
-        where  nv.source_record_id = d.source_record_id
+        merge into {{ this }} d
+        using {{ this }} nv
+        on     nv.source_record_id = d.source_record_id
           and  nv.row_version      = d.row_version + 1
           and  d.is_current
           and  d.cashier_key <> -1
+        when matched then update set
+               is_current            = false,
+               valid_to              = nv.valid_from,
+               etl_updated_timestamp = current_timestamp()
         "
     ]
 ) }}
@@ -54,7 +55,7 @@ with staged as (
         -- source update instant, not the load date.
         e.silver_source_updated_at_timestamp                    as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: a change here = a new version.
-        cast(encode(digest(concat_ws('|',
+        cast(sha2(concat_ws('|',
             coalesce(e.silver_employee_code, ''),
             coalesce(e.silver_first_name, ''),
             coalesce(e.silver_last_name, ''),
@@ -63,7 +64,7 @@ with staged as (
             coalesce(s.silver_store_code, ''),
             coalesce(s.silver_store_name, ''),
             coalesce(cast(e.silver_is_deleted_flag as string), '')
-        ), 'sha256'), 'hex') as string)                          as record_hash
+        ), 256) as string)                          as record_hash
     from {{ ref('employee') }} e
     left join {{ ref('store') }} s
            on s.silver_store_id = e.silver_store_id

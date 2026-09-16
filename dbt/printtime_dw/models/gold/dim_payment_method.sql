@@ -25,15 +25,16 @@
     on_schema_change='fail',
     post_hook=[
         "
-        update {{ this }} d
-        set    is_current           = false,
-               valid_to             = nv.valid_from,
-               etl_updated_timestamp = current_timestamp()
-        from   {{ this }} nv
-        where  nv.source_record_id = d.source_record_id
+        merge into {{ this }} d
+        using {{ this }} nv
+        on     nv.source_record_id = d.source_record_id
           and  nv.row_version      = d.row_version + 1
           and  d.is_current
           and  d.payment_method_key <> -1
+        when matched then update set
+               is_current           = false,
+               valid_to             = nv.valid_from,
+               etl_updated_timestamp = current_timestamp()
         "
     ]
 ) }}
@@ -52,13 +53,13 @@ with staged as (
         -- source update instant, not the load date.
         silver_source_updated_at_timestamp                  as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: a change here = a new version.
-        cast(encode(digest(concat_ws('|',
+        cast(sha2(concat_ws('|',
             coalesce(silver_method_code, ''),
             coalesce(silver_method_name, ''),
             coalesce(silver_method_type, ''),
             coalesce(cast(silver_is_active_flag as string), ''),
             coalesce(cast(silver_is_deleted_flag as string), '')
-        ), 'sha256'), 'hex') as string)                      as record_hash
+        ), 256) as string)                      as record_hash
     from {{ ref('payment_method') }}
 ),
 

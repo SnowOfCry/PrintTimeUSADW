@@ -27,15 +27,16 @@
     on_schema_change='fail',
     post_hook=[
         "
-        update {{ this }} d
-        set    is_current            = false,
-               valid_to              = nv.valid_from,
-               etl_updated_timestamp = current_timestamp()
-        from   {{ this }} nv
-        where  nv.source_record_id = d.source_record_id
+        merge into {{ this }} d
+        using {{ this }} nv
+        on     nv.source_record_id = d.source_record_id
           and  nv.row_version      = d.row_version + 1
           and  d.is_current
           and  d.customer_key <> -1
+        when matched then update set
+               is_current            = false,
+               valid_to              = nv.valid_from,
+               etl_updated_timestamp = current_timestamp()
 "
     ]
 ) }}
@@ -67,7 +68,7 @@ with staged as (
         -- when the change actually happened rather than when the ETL happened to run.
         c.silver_source_updated_at_timestamp                    as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: a change here = a new version.
-        cast(encode(digest(concat_ws('|',
+        cast(sha2(concat_ws('|',
             coalesce(c.silver_customer_account_no, ''),
             coalesce(c.silver_customer_name, ''),
             coalesce(a.silver_street_address_line_1, ''),
@@ -75,7 +76,7 @@ with staged as (
             coalesce(coalesce(st.silver_state_name, a.silver_state_code), ''),
             coalesce(cast(dd.date_key as string), ''),
             coalesce(cast(c.silver_is_deleted_flag as string), '')
-        ), 'sha256'), 'hex') as string)                          as record_hash
+        ), 256) as string)                          as record_hash
     from {{ ref('customer') }} c
     -- exactly one primary address per customer (verified), so no fan-out
     left join {{ ref('customer_address') }} a

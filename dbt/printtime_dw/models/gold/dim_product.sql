@@ -22,15 +22,16 @@
     on_schema_change='fail',
     post_hook=[
         "
-        update {{ this }} d
-        set    is_current            = false,
-               valid_to              = nv.valid_from,
-               etl_updated_timestamp = current_timestamp()
-        from   {{ this }} nv
-        where  nv.source_record_id = d.source_record_id
+        merge into {{ this }} d
+        using {{ this }} nv
+        on     nv.source_record_id = d.source_record_id
           and  nv.row_version      = d.row_version + 1
           and  d.is_current
           and  d.product_key <> -1
+        when matched then update set
+               is_current            = false,
+               valid_to              = nv.valid_from,
+               etl_updated_timestamp = current_timestamp()
         "
     ]
 ) }}
@@ -56,7 +57,7 @@ with staged as (
         -- source update instant, not the load date.
         p.silver_source_updated_at_timestamp                    as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: a change here = a new version.
-        cast(encode(digest(concat_ws('|',
+        cast(sha2(concat_ws('|',
             coalesce(p.silver_product_sku, ''),
             coalesce(p.silver_product_description, ''),
             coalesce(p.silver_brand_name, ''),
@@ -67,7 +68,7 @@ with staged as (
             coalesce(cast(p.silver_standard_price_amount as string), ''),
             coalesce(cast(p.silver_is_local_made_flag as string), ''),
             coalesce(cast(p.silver_is_deleted_flag as string), '')
-        ), 'sha256'), 'hex') as string)                          as record_hash
+        ), 256) as string)                          as record_hash
     from {{ ref('product') }} p
     left join {{ ref('product_category') }} c
            on c.silver_category_id = p.silver_category_id

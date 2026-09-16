@@ -28,15 +28,16 @@
     on_schema_change='fail',
     post_hook=[
         "
-        update {{ this }} d
-        set    is_current            = false,
-               valid_to              = nv.valid_from,
-               etl_updated_timestamp = current_timestamp()
-        from   {{ this }} nv
-        where  nv.source_record_id = d.source_record_id
+        merge into {{ this }} d
+        using {{ this }} nv
+        on     nv.source_record_id = d.source_record_id
           and  nv.row_version      = d.row_version + 1
           and  d.is_current
           and  d.invoice_key <> -1
+        when matched then update set
+               is_current            = false,
+               valid_to              = nv.valid_from,
+               etl_updated_timestamp = current_timestamp()
         "
     ]
 ) }}
@@ -61,7 +62,7 @@ with staged as (
         i.silver_source_updated_at_timestamp                    as src_updated_at,
         -- SHA-256 over the TRACKED attributes only: status and total changes are
         -- what drive new versions here.
-        cast(encode(digest(concat_ws('|',
+        cast(sha2(concat_ws('|',
             coalesce(i.silver_invoice_number, ''),
             coalesce(i.silver_po_number, ''),
             coalesce(cast(i.silver_invoice_date as string), ''),
@@ -72,7 +73,7 @@ with staged as (
             coalesce(s.silver_store_code, ''),
             coalesce(s.silver_store_name, ''),
             coalesce(cast(i.silver_is_deleted_flag as string), '')
-        ), 'sha256'), 'hex') as string)                          as record_hash
+        ), 256) as string)                          as record_hash
     from {{ ref('invoice') }} i
     left join {{ ref('customer') }} c
            on c.silver_customer_id = i.silver_customer_id

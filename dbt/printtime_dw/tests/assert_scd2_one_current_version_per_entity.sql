@@ -19,10 +19,10 @@
 select
     '{{ d }}'                 as dimension,
     source_record_id,
-    sum(is_current::int)      as current_versions
+    sum(cast(is_current as int))      as current_versions
 from {{ ref(d) }}
 where source_record_id <> '-1'
 group by source_record_id
-having sum(is_current::int) <> 1
+having sum(cast(is_current as int)) <> 1
 {% if not loop.last %}union all{% endif %}
 {% endfor %}

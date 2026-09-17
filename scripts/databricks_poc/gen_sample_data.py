@@ -38,7 +38,8 @@ def money(x):
 
 NOW = T("2025-07-01 00:00:00")
 META = ["bronze_record_id", "bronze_batch_id", "bronze_loaded_at_timestamp",
-        "bronze_source_system", "bronze_source_table_name", "bronze_is_deleted_flag"]
+        "bronze_source_system", "bronze_source_table_name", "bronze_is_deleted_flag",
+        "bronze_row_hash"]
 
 conn = sql.connect(server_hostname=os.environ["DBRICKS_HOST"],
                    http_path=os.environ["DBRICKS_HTTP_PATH"],
@@ -50,7 +51,8 @@ def load(table, cols, rows, system="oltp"):
     cur.execute(f"truncate table printtime_dw.bronze.{table}")
     vals = []
     for i, r in enumerate(rows, start=1):
-        line = [fmt(v) for v in r] + [str(i), "1", fmt(NOW), q(system), q(table), "false"]
+        line = [fmt(v) for v in r] + [str(i), "1", fmt(NOW), q(system), q(table), "false",
+                                      q(f"{table}-{i:06d}")]
         vals.append("(" + ",".join(line) + ")")
     for j in range(0, len(vals), 300):
         cur.execute(f"insert into printtime_dw.bronze.{table} ({','.join(allcols)}) "
@@ -63,8 +65,7 @@ CT = ["created_at_source_timestamp", "updated_at_source_timestamp"]
 def cu(created): return [ts(created), ts(created)]   # created + updated timestamps
 
 # ===================== REFERENCE DATA =====================
-STATES = [("TX","Texas"),("CA","California"),("NY","New York"),("FL","Florida"),
-          ("IL","Illinois"),("WA","Washington"),("GA","Georgia"),("AZ","Arizona")]
+STATES = [("TX","Texas"),("CA","California"),("AZ","Arizona")]
 load("ref_state", ["state_code","state_name"]+CT,
      [[c, n]+cu(d(2020,1,1)) for c, n in STATES], system="reference")
 
@@ -82,9 +83,11 @@ load("ref_payment_method",
      ["payment_method_id","method_code","method_name","method_type","is_card_flag","is_active_flag"]+CT,
      [[i,c,n,t,card,True]+cu(d(2020,1,1)) for i,c,n,t,card in PM], system="reference")
 
-PT = [(1,"SALE","Sale","Customer payment for a sale",True),
-      (2,"REFUND","Refund","Money returned to customer",True),
-      (3,"DEPOSIT","Deposit","Upfront deposit",True)]
+PT = [(1,"DEPOSIT","Deposit","Upfront deposit",True),
+      (2,"BALANCE","Balance","Balance payment",True),
+      (3,"FULL","Full Payment","Paid in full",True),
+      (4,"REFUND","Refund","Money returned to customer",True),
+      (5,"ADJUSTMENT","Adjustment","Manual adjustment",True)]
 load("ref_payment_type",
      ["payment_type_id","type_code","type_name","description","affects_balance_flag"]+CT,
      [[i,c,n,desc,ab]+cu(d(2020,1,1)) for i,c,n,desc,ab in PT], system="reference")
@@ -246,7 +249,7 @@ for inv_id in range(1, 151):
             pay_id += 1
             amt = money(remaining if s_ == n_pay else remaining / 2)
             remaining = money(remaining - amt)
-            payments.append([pay_id, inv_id, cust["customer_id"], random.choice(PM)[0], 1,
+            payments.append([pay_id, inv_id, cust["customer_id"], random.choice(PM)[0], random.choice([1,2,3]),
                              emp["employee_id"], store_id, None, s_, "cleared", idate,
                              amt, money(amt * rate / (1 + rate)), Decimal("0.00"), amt,
                              f"REF{pay_id:06d}"] + cu(idate))
@@ -295,13 +298,20 @@ for k, c in enumerate([c for c in CUSTOMERS if c["status"] == "inactive"][:8], s
 load("oltp_customer_status_history",
      ["status_history_id","customer_id","old_status","new_status","changed_at_source_timestamp","changed_by","reason"], csh)
 
-# econ indicators (FRED-style): 2 series x 12 months
+# econ indicators (FRED): CPIAUCSL (CPI, used by bi_revenue_real) and WPU0911
+# (paper PPI, used by bi_margin_vs_paper_cost). Monthly from 2024-01 up to the
+# current month, so the >95-day freshness test passes.
+today = dt.date.today()
+emonths, ey, em = [], 2024, 1
+while (ey, em) <= (today.year, today.month):
+    emonths.append((ey, em))
+    em += 1
+    if em > 12: em, ey = 1, ey + 1
 econ = []
-for si, series in enumerate(["CPIAUCSL", "UNRATE"]):
-    for m in range(1, 13):
-        econ.append([series, d(2024, m, 1),
-                     money(300 + m * 0.5) if si == 0 else money(3.5 + m * 0.02),
-                     "Index" if si == 0 else "Percent"] + cu(d(2024, m, 1)))
+for si, series in enumerate(["CPIAUCSL", "WPU0911"]):
+    for k, (yy, mm) in enumerate(emonths):
+        val = money(300 + k * 0.4) if si == 0 else money(250 + k * 0.3)
+        econ.append([series, d(yy, mm, 1), val, "Index"] + cu(d(yy, mm, 1)))
 load("econ_indicator", ["series_id","observation_date","indicator_value","units"]+CT, econ, system="fred")
 
 print("\nDONE — sample data loaded.")

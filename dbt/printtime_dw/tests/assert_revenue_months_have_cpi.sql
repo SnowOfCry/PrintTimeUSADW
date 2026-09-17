@@ -6,8 +6,8 @@ with rev_months as (
     select distinct (date_key / 100) as month_key from {{ ref('fact_retail_sales') }}
 ),
 cpi_months as (
-    select (extract(year from silver_observation_date) * 100
-            + extract(month from silver_observation_date))::int as month_key
+    select cast((extract(year from silver_observation_date) * 100
+            + extract(month from silver_observation_date)) as int) as month_key
     from {{ ref('econ_indicator') }}
     where silver_series_id = 'CPIAUCSL' and silver_indicator_value is not null
 )

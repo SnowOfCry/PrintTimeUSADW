@@ -306,7 +306,8 @@ We built **layer by layer** and fixed each error the engine reported. Every fix 
 - [x] First model migrated end-to-end: `silver.customer`
 - [x] **ALL 49 models ported + building on Databricks — 49/49 PASS, first-run AND incremental** ✅
 - [x] All 21 bronze tables + 2 audit tables created in Unity Catalog
-- [ ] Load real sample data for every source; run `dbt test`; reconcile against Postgres
+- [x] **Loaded synthetic data + `dbt test` 182/182 PASS + gold reconciles exactly to silver** ✅
+- [x] Ported `tests/` singular tests to Databricks dialect
 - [ ] Port the incremental-only audit change-trail macro (temp table + jsonb) for 2nd+ runs (gated to postgres for now)
 - [ ] Unity Catalog grants + a Databricks Workflow
 - [ ] Decide → paid Azure workspace + ADLS Gen2

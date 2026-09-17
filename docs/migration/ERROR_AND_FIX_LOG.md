@@ -140,6 +140,18 @@ and exactly how each was fixed. Kept for future-me, teammates, and interviews.
 - **Fix:** Translated `sql/audit/002_create_audit_tables.sql` to Databricks (`sql/databricks_poc/audit_tables_databricks.sql`) and created both audit tables. Empty → the watermark defaults to `1900-01-01`, so facts do a full rebuild until real batch rows exist.
 - **Lesson:** A schema is not its tables. Any table a model *reads* (even in a watermark subquery) must exist. Also: when splitting a `.sql` file on `;`, **strip `--` comments first** — a `;` inside a comment (e.g. "safe to re-run; …") splits mid-comment and corrupts the next statement.
 
+### 20. Singular tests (`tests/*.sql`) also carry Postgres dialect
+- **Symptom:** After models built, `dbt test` had 3 ERRORs (`assert_econ_freshness`, `assert_econ_no_month_gaps`, `assert_scd2_no_overlapping_versions`) — SQL errors, not data failures.
+- **Cause:** The bulk port only touched `models/` + `macros/`. The **custom singular tests** in `tests/` are dbt SQL too, with their own Postgres-isms: `current_date - date` (interval), `generate_series(...)`, `date_trunc` on dates, and `cast('infinity' as date)`.
+- **Fix:** Ran the cast port over `tests/*.sql`, then hand-fixed: date subtraction → `datediff`; `from bounds b, generate_series(...)` → `from bounds b lateral view explode(sequence(..., interval 1 month))`; `date_trunc('month', d)` → `trunc(d, 'MM')`; `cast('infinity' as date)` → `date'9999-12-31'`.
+- **Lesson:** "Port the models" isn't the whole job — **`tests/`, `snapshots/`, and `analyses/` are dbt SQL too.** Grep the entire `dbt/` tree for dialect, not just `models/`.
+
+### 21. Synthetic sample data must match the project's expected reference values
+- **Symptom:** 4 test FAILs (not errors): `accepted_values` on state codes and payment-type codes, `assert_margin_months_have_ppi`, `source_not_null ... bronze_row_hash`.
+- **Cause:** My generated data didn't match what the models/tests assume: states must be `CA/AZ/TX`; payment-type codes must be `DEPOSIT/BALANCE/FULL/REFUND/ADJUSTMENT`; the margin model needs FRED series `WPU0911` (paper PPI) and revenue needs `CPIAUCSL`; and `bronze_row_hash` is `not_null`. The freshness test also needs econ dates within ~95 days of today.
+- **Fix:** Updated the generator to those exact vocabularies, added both FRED series running monthly up to the current month, and populated `bronze_row_hash`.
+- **Lesson:** Tests encode the project's business rules. When you fabricate data, read the `accepted_values` / `not_null` / singular tests first and match them — otherwise you're debugging your fixture, not the migration. Result: **182/182 tests pass.**
+
 ---
 
 ## SQL dialect translation cheat-sheet (Postgres → Databricks)
@@ -180,7 +192,8 @@ The mechanical core of the migration. Same patterns repeat across all 49 models.
 - [x] **M5** Create all 21 bronze tables in Unity Catalog ✅
 - [x] **M6a** Build the full project on Databricks — **49/49 PASS**, first-run AND incremental ✅
 - [x] Create audit tables (`etl_batch_control`, `audit_log`) in Unity Catalog ✅
-- [ ] **M6b** Load real sample data for all sources; run `dbt test`; reconcile vs Postgres
+- [x] **M6b** Loaded referentially-consistent synthetic data; **`dbt test` 182/182 PASS**; gold reconciles exactly to silver ($402,727.59, diff 0.00) ✅
+- [x] Ported `tests/` singular tests to Databricks dialect ✅
 - [ ] **M7** Unity Catalog grants + a Databricks Workflow
 - [ ] **M8** Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs
 - [ ] **M9** Decide → paid workspace + ADLS Gen2

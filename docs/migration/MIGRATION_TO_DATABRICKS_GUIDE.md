@@ -298,6 +298,48 @@ We built **layer by layer** and fixed each error the engine reported. Every fix 
 
 ---
 
+## Part 6 — Governance: Unity Catalog grants (replaces the Postgres roles)
+
+Translated `sql/security/001_create_roles.sql` (Postgres roles) into Unity Catalog
+grants — same least-privilege intent (ADR-013), enforced by the catalog.
+
+### Step 6.1 — Create the groups
+- **What:** Created 3 workspace groups: `pt_ingestion`, `pt_dbt`, `pt_bi_reader`.
+- **Why:** UC grants are given to *principals* (groups/users), the way Postgres granted
+  to roles.
+- **How:** Settings → Identity and access → Groups → Add group. Entitlements:
+  all three get **Databricks SQL access**; `pt_ingestion`/`pt_dbt` also get **Workspace
+  access**; `pt_bi_reader` does **not** (least privilege). None get **Admin**.
+  > Entitlements only decide login/compute access — they are NOT data security. The
+  > data protection is the grants in 6.2.
+
+### Step 6.2 — Grant data access
+- **What:** Ran `sql/security/002_unity_catalog_grants.sql`.
+- **Why:** This is the actual security model — who can read/write which schema.
+- **How (the mapping):**
+  | Group | Grant |
+  |---|---|
+  | pt_ingestion | `USE SCHEMA, SELECT, MODIFY` on bronze, audit |
+  | pt_dbt | `SELECT` on bronze; `SELECT, MODIFY` on audit; `ALL PRIVILEGES` on silver, gold |
+  | pt_bi_reader | `USE SCHEMA, SELECT` on **gold only** |
+- **Two UC facts that differ from Postgres:**
+  - Privileges are **inherited** — `GRANT SELECT ON SCHEMA` covers all current *and future*
+    tables. No per-table grants, no `ALTER DEFAULT PRIVILEGES`.
+  - Write is one privilege, **`MODIFY`** (no separate INSERT/UPDATE). Read is `SELECT`.
+
+### Step 6.3 — Verify the PII guarantee
+- **What:** Confirmed `pt_bi_reader` can read gold but nothing on silver.
+- **How:**
+  ```sql
+  SHOW GRANTS `pt_bi_reader` ON SCHEMA printtime_dw.gold;    -- returns SELECT/USE SCHEMA
+  SHOW GRANTS `pt_bi_reader` ON SCHEMA printtime_dw.silver;  -- returns ZERO rows
+  ```
+- **Why it matters:** UC denies by default, so the empty silver result *is* the ADR-013
+  guarantee — BI structurally cannot read `silver.customer`'s email/phone. Enforcement,
+  not policy.
+
+---
+
 ## Where we are
 
 - [x] Repo synced to GitHub, migration branch created
@@ -308,7 +350,9 @@ We built **layer by layer** and fixed each error the engine reported. Every fix 
 - [x] All 21 bronze tables + 2 audit tables created in Unity Catalog
 - [x] **Loaded synthetic data + `dbt test` 182/182 PASS + gold reconciles exactly to silver** ✅
 - [x] Ported `tests/` singular tests to Databricks dialect
+- [x] **Unity Catalog governance: 3 groups + grants; PII guarantee verified (bi_reader has no silver access)** ✅
 - [ ] Port the incremental-only audit change-trail macro (temp table + jsonb) for 2nd+ runs (gated to postgres for now)
+- [ ] Databricks Workflow (orchestration) → then paid workspace + ADLS Gen2
 - [ ] Unity Catalog grants + a Databricks Workflow
 - [ ] Decide → paid Azure workspace + ADLS Gen2
 

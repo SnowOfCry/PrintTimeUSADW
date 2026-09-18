@@ -194,7 +194,8 @@ The mechanical core of the migration. Same patterns repeat across all 49 models.
 - [x] Create audit tables (`etl_batch_control`, `audit_log`) in Unity Catalog ✅
 - [x] **M6b** Loaded referentially-consistent synthetic data; **`dbt test` 182/182 PASS**; gold reconciles exactly to silver ($402,727.59, diff 0.00) ✅
 - [x] Ported `tests/` singular tests to Databricks dialect ✅
-- [ ] **M7** Unity Catalog grants + a Databricks Workflow
+- [x] **M7a** Unity Catalog grants: 3 groups + `sql/security/002_unity_catalog_grants.sql`; PII guarantee verified (bi_reader has zero silver access) ✅
+- [ ] **M7b** Databricks Workflow (orchestration)
 - [ ] **M8** Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs
 - [ ] **M9** Decide → paid workspace + ADLS Gen2
 

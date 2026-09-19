@@ -340,6 +340,61 @@ grants — same least-privilege intent (ADR-013), enforced by the catalog.
 
 ---
 
+## Part 7 — Orchestration: a Databricks Workflow (replaces Airflow)
+
+Ran dbt *inside* Databricks on a schedule — the native replacement for the Airflow
+`printtime_elt_pipeline` DAG. This is where dbt finally appears **in** Databricks
+(vs. running from your laptop).
+
+### Scope
+The Airflow DAG had two halves: Python OLTP ingestion, and the dbt run/test steps.
+The OLTP is offline, so this Workflow orchestrates **the dbt half** (silver → gold →
+test). Real ingestion tasks would be added upstream when a source exists.
+
+### Step 7.1 — Connect GitHub to Databricks
+- **What:** Linked the GitHub account so the job can fetch the repo.
+- **How:** Settings → Linked accounts / Git integration → GitHub → authorize (OAuth or a
+  PAT with `repo` scope).
+
+### Step 7.2 — Create the Job + dbt task
+- **What:** One job `printtime_elt_databricks` with a single **dbt** task
+  `dbt_build_and_test`.
+- **How:** Workflows → Create job → task type **dbt**:
+  - Source: **Git**, repo URL, branch `migrate/databricks`
+  - dbt project directory: `dbt/printtime_dw`
+  - SQL warehouse: the serverless warehouse
+  - Catalog `printtime_dw`, Schema `silver`
+  - dbt commands (run in order; `dbt test` at the end **gates** the run):
+    ```
+    dbt run --select silver --vars '{silver_batch_id: 1}'
+    dbt run --select gold --vars '{gold_batch_ids: {gold.dimensions: 1, gold.fact_customer_behavior_snapshot: 1, gold.fact_payments: 1, gold.fact_retail_sales: 1}}'
+    dbt test
+    ```
+- **Key:** do NOT add `--target` / `--profiles-dir` / `--project-dir` — the managed dbt
+  task **auto-generates its own `profiles.yml`** from the warehouse + catalog + schema, so
+  no token is needed here (the job uses its own identity). The repo's `profiles.yml`
+  (env-var based) is only for local runs.
+
+### Step 7.3 — Run, schedule, alert
+- **Run now** → **Succeeded**; the dbt Output shows `PASS=49` (runs) and `PASS=182 ERROR=0`
+  (tests). Verified the warehouse still reconciles (gold = silver line total, diff 0).
+- **Schedule:** Schedules & Triggers → Add trigger → Scheduled (e.g. daily). Toggle off
+  when not demoing to save Free-Edition capacity.
+- **Alert:** Notifications → add email on Failure (the Airflow `alert_on_failure` equivalent).
+
+### Known cosmetic noise (not errors)
+The run log shows two `PermissionError`s from Databricks' own wrapper — one writing the
+generated `profiles.yml` to a temp dir, one in `shutil.rmtree` cleaning up the cloned repo
+*after* the run. Both are Free-Edition serverless quirks; the job Succeeds and the dbt
+Output shows `ERROR=0`. Nothing in the project to fix.
+
+### Advanced follow-up (optional)
+The Workflow config lives in Databricks, not Git. To version it, export it as a
+**Databricks Asset Bundle** (`databricks.yml` + job YAML) and commit it — then the job
+itself is code-reviewed and reproducible.
+
+---
+
 ## Where we are
 
 - [x] Repo synced to GitHub, migration branch created
@@ -351,8 +406,9 @@ grants — same least-privilege intent (ADR-013), enforced by the catalog.
 - [x] **Loaded synthetic data + `dbt test` 182/182 PASS + gold reconciles exactly to silver** ✅
 - [x] Ported `tests/` singular tests to Databricks dialect
 - [x] **Unity Catalog governance: 3 groups + grants; PII guarantee verified (bi_reader has no silver access)** ✅
+- [x] **Databricks Workflow: dbt runs in Databricks on a schedule (silver→gold→test), 182/182 green, alerts on failure** ✅
 - [ ] Port the incremental-only audit change-trail macro (temp table + jsonb) for 2nd+ runs (gated to postgres for now)
-- [ ] Databricks Workflow (orchestration) → then paid workspace + ADLS Gen2
+- [ ] Paid workspace + ADLS Gen2 (leave Free Edition) · rotate the PAT
 - [ ] Unity Catalog grants + a Databricks Workflow
 - [ ] Decide → paid Azure workspace + ADLS Gen2
 

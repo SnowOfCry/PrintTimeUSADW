@@ -152,6 +152,12 @@ and exactly how each was fixed. Kept for future-me, teammates, and interviews.
 - **Fix:** Updated the generator to those exact vocabularies, added both FRED series running monthly up to the current month, and populated `bronze_row_hash`.
 - **Lesson:** Tests encode the project's business rules. When you fabricate data, read the `accepted_values` / `not_null` / singular tests first and match them — otherwise you're debugging your fixture, not the migration. Result: **182/182 tests pass.**
 
+### 22. Workflow `PermissionError` on profiles.yml / customer.sql (harmless)
+- **Symptom:** A succeeded Databricks Workflow run's log shows `PermissionError: [Errno 13] Permission denied: '/tmp/tmp-dbt-run-.../profiles.yml'` and `... 'customer.sql'` (in `shutil.rmtree`).
+- **Cause:** Both are in Databricks' **wrapper** around the managed dbt task — generating its temp `profiles.yml` and cleaning up the cloned repo *after* the run — on Free-Edition serverless. Not your dbt run.
+- **Fix:** None. The job status is **Succeeded** and the dbt **Output** tab shows `PASS=… ERROR=0` (we saw `PASS=182 ERROR=0`); the warehouse still reconciled. Confirm via the dbt Output + a reconciliation query, not the raw wrapper log.
+- **Lesson:** In managed dbt tasks, read the **dbt Output** (the `PASS/ERROR` summary), not the platform wrapper stderr. A green task status plus `ERROR=0` is the truth; temp-dir/cleanup `PermissionError`s are cosmetic. Don't add `--profiles-dir`/`--target` to the commands — the managed task owns the profile.
+
 ---
 
 ## SQL dialect translation cheat-sheet (Postgres → Databricks)
@@ -195,7 +201,7 @@ The mechanical core of the migration. Same patterns repeat across all 49 models.
 - [x] **M6b** Loaded referentially-consistent synthetic data; **`dbt test` 182/182 PASS**; gold reconciles exactly to silver ($402,727.59, diff 0.00) ✅
 - [x] Ported `tests/` singular tests to Databricks dialect ✅
 - [x] **M7a** Unity Catalog grants: 3 groups + `sql/security/002_unity_catalog_grants.sql`; PII guarantee verified (bi_reader has zero silver access) ✅
-- [ ] **M7b** Databricks Workflow (orchestration)
+- [x] **M7b** Databricks Workflow: managed dbt task (silver→gold→test) on a schedule with failure alerts; 182/182 green in-platform ✅
 - [ ] **M8** Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs
 - [ ] **M9** Decide → paid workspace + ADLS Gen2
 

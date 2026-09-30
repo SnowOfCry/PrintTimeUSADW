@@ -52,22 +52,25 @@ where p.silver_updated_at_timestamp > {{ last_gold_watermark('gold.fact_payments
 --   changed_set   SQL selecting the changed match_col values (a changed_* macro)
 --   reason_sql    SQL expression (may reference alias f) for change_reason
 {% macro audit_stage_before_image(record_key, match_col, changed_set, reason_sql="'source_update'") -%}
-{# Databricks port TODO (M8): this uses Postgres temp tables + to_jsonb. Gated to
-   postgres so Databricks incremental fact re-runs stay green; audit-log feature
-   is deferred, not the fact data. #}
-{% if is_incremental() and target.type == 'postgres' %}
-drop table if exists _audit_stage_{{ this.identifier }};
-create temp table _audit_stage_{{ this.identifier }} as
+{# Databricks port (M8): Spark SQL has no session temp tables, so stage the
+   before-image into a real Delta table (CREATE OR REPLACE each run, so no manual
+   DROP — which also keeps this a SINGLE statement, since the databricks-sql
+   connector runs one statement per hook). Captured BEFORE dbt's delete+insert
+   replaces the fact rows; read back by audit_write_change_log. Not wrapped in a
+   cross-hook transaction (Databricks auto-commits each statement), but the
+   pre-hook still runs first, so the snapshot precedes the reload. #}
+{% if is_incremental() %}
+create or replace table {{ this.database }}.audit.audit_stage_{{ this.identifier }} as
 select
     cast(f.{{ record_key }} as string)     as record_key,
-    to_jsonb(f)                            as old_row,
-    (to_jsonb(f) ->> 'source_record_id')   as match_key,   -- pairs old row to its replacement
-    cast(({{ reason_sql }}) as string)       as change_reason,
+    to_json(struct(f.*))                   as old_row,       -- Postgres to_jsonb(f)
+    cast(f.source_record_id as string)     as match_key,     -- pairs old row to its replacement
+    cast(({{ reason_sql }}) as string)     as change_reason,
     f.source_system                        as source_system
 from {{ this }} f
 where f.{{ match_col }} in (
     {{ changed_set }}
-);
+)
 {% endif %}
 {%- endmacro %}
 
@@ -76,11 +79,13 @@ where f.{{ match_col }} in (
 -- adjustment reason(s) in silver, else the generic 'source_update'. References
 -- the pre_hook's fact alias f (f.invoice_number).
 {% macro reason_from_invoice_adjustment() -%}
-coalesce((select string_agg(distinct ia.silver_adjustment_reason, '; ')
+{#- Databricks: string_agg(distinct x, '; ') -> concat_ws('; ', collect_set(x)).
+    collect_set already deduplicates; nullif('' ,'') falls back to the generic reason. -#}
+coalesce(nullif((select concat_ws('; ', collect_set(ia.silver_adjustment_reason))
           from {{ ref('invoice_adjustment') }} ia
           join {{ ref('invoice') }} i on i.silver_invoice_id = ia.silver_invoice_id
           where i.silver_invoice_number = f.invoice_number
-            and ia.silver_adjustment_reason is not null), 'source_update')
+            and ia.silver_adjustment_reason is not null), ''), 'source_update')
 {%- endmacro %}
 
 
@@ -91,33 +96,39 @@ coalesce((select string_agg(distinct ia.silver_adjustment_reason, '; ')
 --   surrogate_key   the fact's dbt-managed key (excluded from the diff: it is
 --                   regenerated on every reload and is not a business change).
 {% macro audit_write_change_log(target, surrogate_key) -%}
-{# Databricks port TODO (M8): Postgres jsonb diff + temp table. Gated to postgres. #}
-{% if is_incremental() and target.type == 'postgres' %}
-insert into audit.audit_log
+{# Databricks port (M8): pairs each staged before-image to its replacement row by
+   the durable source_record_id, fills new_row + changed_columns, and writes one
+   insert-only audit_log row. Single statement (the staging table is left in place
+   and CREATE OR REPLACE'd by the next pre-hook). Postgres jsonb ops -> Spark:
+   to_jsonb(f) -> to_json(struct(f.*)); the jsonb_each_text diff -> map_filter over
+   from_json(...,'map<string,string>') with <=> as the null-safe compare. #}
+{% if is_incremental() %}
+insert into {{ this.database }}.audit.audit_log
     (table_name, operation_type, record_key, old_row, new_row, changed_columns,
-     change_reason, etl_batch_id, source_system, changed_by_app_user)
+     change_reason, etl_batch_id, source_system, changed_by_app_user, changed_at)
 select
     '{{ target }}',
     case when f.source_record_id is null then 'DELETE' else 'UPDATE' end,
     s.record_key,
     s.old_row,
-    case when f.source_record_id is null then null else to_jsonb(f) end,
-    -- which BUSINESS columns changed (exclude load metadata + the regenerated
-    -- surrogate key, which always differ on a reload). NULL for a delete.
-    case when f.source_record_id is null then null else (
-        select jsonb_agg(o.key order by o.key)
-        from jsonb_each_text(s.old_row) o
-        where o.key not in ('{{ surrogate_key }}', 'etl_batch_id',
-                            'etl_load_timestamp', 'etl_updated_timestamp')
-          and o.value is distinct from (to_jsonb(f) ->> o.key)
-    ) end,
+    case when f.source_record_id is null then null else to_json(struct(f.*)) end,
+    -- which BUSINESS columns changed (exclude the regenerated surrogate key +
+    -- load metadata, which always differ on a reload). NULL for a delete.
+    case when f.source_record_id is null then null else
+        to_json(sort_array(map_keys(map_filter(
+            from_json(s.old_row, 'map<string,string>'),
+            (k, v) -> not array_contains(
+                          array('{{ surrogate_key }}', 'etl_batch_id',
+                                'etl_load_timestamp', 'etl_updated_timestamp'), k)
+                      and not (v <=> from_json(to_json(struct(f.*)), 'map<string,string>')[k])
+        ))))
+    end,
     s.change_reason,
     cast('{{ gold_batch_id() }}' as string),
     s.source_system,
-    'dbt:printtime_elt_pipeline'
-from _audit_stage_{{ this.identifier }} s
-left join {{ this }} f on f.source_record_id = s.match_key;
-
-drop table if exists _audit_stage_{{ this.identifier }};
+    'dbt:printtime_elt_pipeline',
+    current_timestamp()
+from {{ this.database }}.audit.audit_stage_{{ this.identifier }} s
+left join {{ this }} f on cast(f.source_record_id as string) = s.match_key
 {% endif %}
 {%- endmacro %}

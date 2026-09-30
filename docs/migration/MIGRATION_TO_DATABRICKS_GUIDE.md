@@ -407,7 +407,7 @@ itself is code-reviewed and reproducible.
 - [x] Ported `tests/` singular tests to Databricks dialect
 - [x] **Unity Catalog governance: 3 groups + grants; PII guarantee verified (bi_reader has no silver access)** ✅
 - [x] **Databricks Workflow: dbt runs in Databricks on a schedule (silver→gold→test), 182/182 green, alerts on failure** ✅
-- [ ] Port the incremental-only audit change-trail macro (temp table + jsonb) for 2nd+ runs (gated to postgres for now)
+- [x] **Audit change-trail macro (M8) ported to Databricks — audit.audit_log written on fact reloads; jsonb/temp-table logic → to_json/struct + map_filter** ✅
 - [ ] Paid workspace + ADLS Gen2 (leave Free Edition) · rotate the PAT
 - [ ] Unity Catalog grants + a Databricks Workflow
 - [ ] Decide → paid Azure workspace + ADLS Gen2

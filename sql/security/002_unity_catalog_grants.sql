@@ -44,7 +44,7 @@ GRANT USE SCHEMA, SELECT, MODIFY ON SCHEMA printtime_dw.audit  TO `pt_ingestion`
 
 -- ── 3. pt_dbt — read bronze + audit; OWN (full control of) silver + gold ─────
 GRANT USE SCHEMA, SELECT         ON SCHEMA printtime_dw.bronze TO `pt_dbt`;
-GRANT USE SCHEMA, SELECT, MODIFY ON SCHEMA printtime_dw.audit  TO `pt_dbt`;  -- writes audit.audit_log on fact reloads
+GRANT USE SCHEMA, SELECT, MODIFY, CREATE TABLE ON SCHEMA printtime_dw.audit TO `pt_dbt`;  -- writes audit_log + the audit_stage_* before-image table on fact reloads
 GRANT ALL PRIVILEGES             ON SCHEMA printtime_dw.silver TO `pt_dbt`;
 GRANT ALL PRIVILEGES             ON SCHEMA printtime_dw.gold   TO `pt_dbt`;
 

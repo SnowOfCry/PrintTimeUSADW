@@ -152,6 +152,18 @@ and exactly how each was fixed. Kept for future-me, teammates, and interviews.
 - **Fix:** Updated the generator to those exact vocabularies, added both FRED series running monthly up to the current month, and populated `bronze_row_hash`.
 - **Lesson:** Tests encode the project's business rules. When you fabricate data, read the `accepted_values` / `not_null` / singular tests first and match them — otherwise you're debugging your fixture, not the migration. Result: **182/182 tests pass.**
 
+### 23. Porting the audit change-trail macro (jsonb + temp tables) — M8
+- **Symptom:** The `audit_change_trail` macros were Postgres-only (gated to `target.type == 'postgres'`), so the audit-log feature didn't run on Databricks.
+- **Cause:** They used Postgres `create temp table`, `to_jsonb(f)`, `jsonb_each_text` / `jsonb_agg`, `->>`, and `string_agg` — none exist in Spark SQL.
+- **Fix (`macros/audit_change_trail.sql`):**
+  - `create temp table X as …` → **`CREATE OR REPLACE TABLE {catalog}.audit.audit_stage_<id> AS …`** — Spark has no session temp tables, so stage into a real Delta table that's replaced each run (also keeps it a single statement, since the connector runs one statement per hook; no separate `DROP`).
+  - `to_jsonb(f)` → **`to_json(struct(f.*))`**; `to_jsonb(f) ->> 'source_record_id'` → just `cast(f.source_record_id as string)`.
+  - the changed-columns diff (`select jsonb_agg(key) from jsonb_each_text(old) where value is distinct from new->>key`) → **`to_json(sort_array(map_keys(map_filter(from_json(old,'map<string,string>'), (k,v) -> not array_contains(excluded, k) and not (v <=> new_map[k])))))`** — `<=>` is Spark's null-safe equals (= Postgres `is distinct from`).
+  - `string_agg(distinct x, '; ')` → **`concat_ws('; ', collect_set(x))`**.
+  - Removed the `target.type == 'postgres'` gate; added `CREATE TABLE` on `audit` to `pt_dbt`'s grants.
+- **Verified:** ran both facts incrementally → `audit.audit_log` got 158 + 382 `UPDATE` rows; `change_reason` picked up `'damage'` (the adjustment-reason join); a direct diff test returned `changed_columns = ["amount"]` (caught the changed field, ignored the surrogate key + `etl_batch_id`).
+- **Lesson:** JSON/row-diff logic ports cleanly to Spark via `struct`/`to_json`/`from_json` + higher-order functions (`map_filter`, `transform`). For "capture state then compare" patterns, remember Databricks has **no session temp tables** — use a `CREATE OR REPLACE TABLE` staging table instead, and keep each hook to one statement.
+
 ### 22. Workflow `PermissionError` on profiles.yml / customer.sql (harmless)
 - **Symptom:** A succeeded Databricks Workflow run's log shows `PermissionError: [Errno 13] Permission denied: '/tmp/tmp-dbt-run-.../profiles.yml'` and `... 'customer.sql'` (in `shutil.rmtree`).
 - **Cause:** Both are in Databricks' **wrapper** around the managed dbt task — generating its temp `profiles.yml` and cleaning up the cloned repo *after* the run — on Free-Edition serverless. Not your dbt run.
@@ -202,7 +214,7 @@ The mechanical core of the migration. Same patterns repeat across all 49 models.
 - [x] Ported `tests/` singular tests to Databricks dialect ✅
 - [x] **M7a** Unity Catalog grants: 3 groups + `sql/security/002_unity_catalog_grants.sql`; PII guarantee verified (bi_reader has zero silver access) ✅
 - [x] **M7b** Databricks Workflow: managed dbt task (silver→gold→test) on a schedule with failure alerts; 182/182 green in-platform ✅
-- [ ] **M8** Port the incremental-only audit macro (temp table + jsonb) for 2nd+ runs
+- [x] **M8** Ported the incremental audit change-trail macro to Databricks; verified audit.audit_log written (158 + 382 rows) and the changed-columns diff works ✅
 - [ ] **M9** Decide → paid workspace + ADLS Gen2
 
 ---

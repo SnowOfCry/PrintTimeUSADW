@@ -152,6 +152,12 @@ and exactly how each was fixed. Kept for future-me, teammates, and interviews.
 - **Fix:** Updated the generator to those exact vocabularies, added both FRED series running monthly up to the current month, and populated `bronze_row_hash`.
 - **Lesson:** Tests encode the project's business rules. When you fabricate data, read the `accepted_values` / `not_null` / singular tests first and match them — otherwise you're debugging your fixture, not the migration. Result: **182/182 tests pass.**
 
+### 24. CI still built against Postgres — migrate the pipeline too
+- **Symptom:** The GitHub Actions `dbt Build & Test` job spins up an ephemeral `postgres:16` and runs `dbt build` (dbt-postgres) against it. On the migrated branch every model is Databricks dialect (`sha2`, `MERGE INTO`, `cast(... as string)`, `datediff`, `explode(sequence())`), so that job would fail on the PR. The lint/unit/docker jobs are unaffected (they test `ingestion/` Python, untouched).
+- **Cause:** A dialect migration changes the *target*, so a CI job that executes the old dialect no longer applies. CI is part of the migration surface, like `tests/`.
+- **Fix (`.github/workflows/ci.yml`):** Replaced the Postgres build job with a secret-free **`dbt parse --target databricks`** job — installs `dbt-databricks`, sets DUMMY connection env vars (dbt renders *all* profile outputs at load, so every `env_var` it references must be set; parse never connects), and validates that all models/macros/tests compile + the manifest builds. Verified locally with dummy env → exit 0, `manifest.json` written.
+- **Lesson:** Migrating the warehouse means migrating the **CI** too. If you can't run the new dialect in CI without secrets, `dbt parse` is a strong free gate (it would have caught the `tests/` dialect miss). Add a real `dbt build` against Databricks later via repo secrets for execution-level fidelity. (For `pull_request`, GitHub uses the workflow file from the PR head branch, so fixing ci.yml on the branch makes the PR's own checks green.)
+
 ### 23. Porting the audit change-trail macro (jsonb + temp tables) — M8
 - **Symptom:** The `audit_change_trail` macros were Postgres-only (gated to `target.type == 'postgres'`), so the audit-log feature didn't run on Databricks.
 - **Cause:** They used Postgres `create temp table`, `to_jsonb(f)`, `jsonb_each_text` / `jsonb_agg`, `->>`, and `string_agg` — none exist in Spark SQL.

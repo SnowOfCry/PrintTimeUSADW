@@ -1,20 +1,20 @@
 -- =============================================================================
 -- gold.fact_payments
--- Type:    transaction fact (no SCD2 — facts are measurements, never versioned).
+-- Type:    transaction fact (no SCD2 â€” facts are measurements, never versioned).
 -- Grain:   one row per PAYMENT.
 -- Source:  silver.payment
 -- Keys:    dim_invoice, dim_customer, dim_payment_method, dim_date,
 --          dim_payment_type, dim_cashier, dim_store, + self-ref parent_payment_key
 -- Spec:    sql/gold/002_create_gold_tables.sql (gold.fact_payments)
---          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md §10
+--          docs/source_to_dw_mapping/Silver_to_Gold_mapping.md Â§10
 --          ADR-007 (per-grain fact loads), ADR-009 (no source business keys),
 --          ADR-011 (-1 fallback), gold decision #3 (change detection)
 --
--- REFUND SIGN CONVENTION (backlog #5 — read before building BI measures):
+-- REFUND SIGN CONVENTION (backlog #5 â€” read before building BI measures):
 --   Refunds are stored as NEGATIVE amounts and carry parent_payment_key pointing
 --   at the payment they reverse (1,354 refunds, summing to -19,275,453.64).
 --   SUM(payment_amount) therefore NETS refunds automatically. BI must not filter
---   refunds out or negate them again — either would double-count the reversal.
+--   refunds out or negate them again â€” either would double-count the reversal.
 --
 -- parent_payment_key resolution (the "second pass", ADR-009):
 --   The refund chain exists in silver as parent_payment_id, but the fact stores
@@ -33,16 +33,6 @@
     incremental_strategy='delete+insert',
     unique_key='source_record_id',
     on_schema_change='fail',
-    indexes=[
-        {'columns': ['invoice_key']},
-        {'columns': ['customer_key']},
-        {'columns': ['payment_method_key']},
-        {'columns': ['date_key']},
-        {'columns': ['payment_type_key']},
-        {'columns': ['cashier_key']},
-        {'columns': ['store_key']},
-        {'columns': ['parent_payment_key']},
-    ],
     pre_hook="{{ audit_stage_before_image('source_record_id', 'source_record_id', changed_payment_ids()) }}",
     post_hook="{{ audit_write_change_log('gold.fact_payments', 'payment_key') }}"
 ) }}
@@ -62,53 +52,53 @@ with source_payments as (
 -- 2) Resolve dimension surrogate keys against the CURRENT version; unmatched -> -1.
 keyed as (
     select
-        coalesce(di.invoice_key,        -1)::integer     as invoice_key,
-        coalesce(dc.customer_key,       -1)::integer     as customer_key,
-        coalesce(dpm.payment_method_key,-1)::integer     as payment_method_key,
-        coalesce(dd.date_key,           -1)::integer     as date_key,
-        coalesce(dpt.payment_type_key,  -1)::integer     as payment_type_key,
-        coalesce(dcash.cashier_key,     -1)::integer     as cashier_key,
-        coalesce(ds.store_key,          -1)::integer     as store_key,
-        p.silver_payment_sequence_num::smallint          as payment_sequence_num,
-        p.silver_payment_amount::numeric(12,2)           as payment_amount,
-        p.silver_tax_amount::numeric(12,2)               as tax_amount,
-        p.silver_fee_amount::numeric(12,2)               as fee_amount,
-        p.silver_net_amount::numeric(12,2)               as net_amount,
-        p.silver_source_system::varchar(50)              as source_system,
-        p.silver_payment_id::varchar(100)                as source_record_id,
+        cast(coalesce(di.invoice_key,        -1) as int)     as invoice_key,
+        cast(coalesce(dc.customer_key,       -1) as int)     as customer_key,
+        cast(coalesce(dpm.payment_method_key,-1) as int)     as payment_method_key,
+        cast(coalesce(dd.date_key,           -1) as int)     as date_key,
+        cast(coalesce(dpt.payment_type_key,  -1) as int)     as payment_type_key,
+        cast(coalesce(dcash.cashier_key,     -1) as int)     as cashier_key,
+        cast(coalesce(ds.store_key,          -1) as int)     as store_key,
+        cast(p.silver_payment_sequence_num as smallint)          as payment_sequence_num,
+        cast(p.silver_payment_amount as decimal(12,2))           as payment_amount,
+        cast(p.silver_tax_amount as decimal(12,2))               as tax_amount,
+        cast(p.silver_fee_amount as decimal(12,2))               as fee_amount,
+        cast(p.silver_net_amount as decimal(12,2))               as net_amount,
+        cast(p.silver_source_system as string)              as source_system,
+        cast(p.silver_payment_id as string)                as source_record_id,
         -- carried only to resolve the refund chain below; not stored (ADR-009)
         p.silver_parent_payment_id                       as parent_payment_id
     from source_payments p
     -- SCD2 keys resolved by EFFECTIVE DATE (audit HIGH-3): the version in effect on
-    -- the payment date — [valid_from, valid_to) — not the entity's current version.
-    left join {{ ref('dim_invoice') }}        di    on di.source_record_id    = p.silver_invoice_id::varchar
+    -- the payment date â€” [valid_from, valid_to) â€” not the entity's current version.
+    left join {{ ref('dim_invoice') }}        di    on di.source_record_id    = cast(p.silver_invoice_id as string)
                 and p.silver_payment_date >= di.valid_from  and (p.silver_payment_date < di.valid_to  or di.valid_to  is null)
-    left join {{ ref('dim_customer') }}       dc    on dc.source_record_id    = p.silver_customer_id::varchar
+    left join {{ ref('dim_customer') }}       dc    on dc.source_record_id    = cast(p.silver_customer_id as string)
                 and p.silver_payment_date >= dc.valid_from  and (p.silver_payment_date < dc.valid_to  or dc.valid_to  is null)
-    left join {{ ref('dim_payment_method') }} dpm   on dpm.source_record_id   = p.silver_payment_method_id::varchar
+    left join {{ ref('dim_payment_method') }} dpm   on dpm.source_record_id   = cast(p.silver_payment_method_id as string)
                 and p.silver_payment_date >= dpm.valid_from and (p.silver_payment_date < dpm.valid_to or dpm.valid_to is null)
     left join {{ ref('dim_date') }}           dd    on dd.date                = p.silver_payment_date
     -- dim_payment_type is Type 1 and keyed on type_code, so hop through silver
     -- to translate the payment's type id into that code.
     left join {{ ref('payment_type') }}       spt   on spt.silver_payment_type_id = p.silver_payment_type_id
     left join {{ ref('dim_payment_type') }}   dpt   on dpt.type_code          = spt.silver_type_code
-    left join {{ ref('dim_cashier') }}        dcash on dcash.source_record_id = p.silver_employee_id::varchar
+    left join {{ ref('dim_cashier') }}        dcash on dcash.source_record_id = cast(p.silver_employee_id as string)
                 and p.silver_payment_date >= dcash.valid_from and (p.silver_payment_date < dcash.valid_to or dcash.valid_to is null)
-    left join {{ ref('dim_store') }}          ds    on ds.source_record_id    = p.silver_store_id::varchar
+    left join {{ ref('dim_store') }}          ds    on ds.source_record_id    = cast(p.silver_store_id as string)
                 and p.silver_payment_date >= ds.valid_from  and (p.silver_payment_date < ds.valid_to  or ds.valid_to  is null)
 ),
 
 -- 3) dbt-managed surrogate key (decision #7), continuing from the current max.
 keyed_with_pk as (
     select
-        (
+        cast((
             {% if is_incremental() %}
             (select coalesce(max(payment_key), 0) from {{ this }})
             {% else %}
             0
             {% endif %}
-            + row_number() over (order by source_record_id::bigint)
-        )::integer                                       as payment_key,
+            + row_number() over (order by cast(source_record_id as bigint))
+        ) as int)                                       as payment_key,
         k.*
     from keyed k
 ),
@@ -135,7 +125,7 @@ with_parent as (
         c.source_record_id
     from keyed_with_pk c
     left join keyed_with_pk parent
-           on parent.source_record_id = c.parent_payment_id::varchar
+           on parent.source_record_id = cast(c.parent_payment_id as string)
 )
 
 select
@@ -155,11 +145,11 @@ select
     net_amount,
     source_system,
     source_record_id,
-    '{{ gold_batch_id() }}'::varchar(50) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
-    current_timestamp::timestamp    as etl_load_timestamp,
-    current_timestamp::timestamp    as etl_updated_timestamp,
+    cast('{{ gold_batch_id() }}' as string) as etl_batch_id,   -- MED-10: real batch id (joins etl_batch_control.batch_id)
+    cast(current_timestamp() as timestamp)    as etl_load_timestamp,
+    cast(current_timestamp() as timestamp)    as etl_updated_timestamp,
     true                            as is_complete,
     false                           as is_validated,
     false                           as dq_issue_flag,
-    null::varchar(500)              as dq_issue_description
+    cast(null as string)              as dq_issue_description
 from with_parent

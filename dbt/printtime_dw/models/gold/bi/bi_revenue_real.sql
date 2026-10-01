@@ -21,8 +21,8 @@ with monthly as (
 
 cpi_raw as (
     select
-        (extract(year from silver_observation_date) * 100
-         + extract(month from silver_observation_date))::int as month_key,
+        cast((extract(year from silver_observation_date) * 100
+         + extract(month from silver_observation_date)) as int) as month_key,
         silver_indicator_value                                as cpi
     from {{ ref('econ_indicator') }}
     where silver_series_id = 'CPIAUCSL'

@@ -46,8 +46,8 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Status code lower-cased (ADR-005 #4 vocabulary); name trimmed + collapsed.
-        nullif(lower(trim(status_code)), '')::varchar(20)                            as silver_status_code,
-        nullif(regexp_replace(trim(status_name), '\s+', ' ', 'g'), '')::varchar(50)  as silver_status_name,
+        cast(nullif(lower(trim(status_code)), '') as string)                            as silver_status_code,
+        cast(nullif(regexp_replace(trim(status_name), '\\s+', ' '), '') as string)  as silver_status_name,
 
         {{ silver_lineage_and_metadata(source_record_id='status_code') }}
 
@@ -62,12 +62,12 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
                 coalesce(silver_status_code, ''),
                 coalesce(silver_status_name, '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

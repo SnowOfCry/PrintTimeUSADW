@@ -9,7 +9,7 @@
 select
     silver_series_id,
     max(silver_observation_date)                 as latest_observation,
-    current_date - max(silver_observation_date)  as days_stale
+    datediff(current_date(), max(silver_observation_date))  as days_stale
 from {{ ref('econ_indicator') }}
 group by silver_series_id
-having current_date - max(silver_observation_date) > 95
+having datediff(current_date(), max(silver_observation_date)) > 95

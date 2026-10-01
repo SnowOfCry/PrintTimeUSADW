@@ -31,7 +31,7 @@ join {{ ref(d) }} b
   on  b.source_record_id = a.source_record_id
   and a.row_version      < b.row_version
 where a.source_record_id <> '-1'
-  and a.valid_from < coalesce(b.valid_to, 'infinity'::date)
-  and b.valid_from < coalesce(a.valid_to, 'infinity'::date)
+  and a.valid_from < coalesce(b.valid_to, date'9999-12-31')
+  and b.valid_from < coalesce(a.valid_to, date'9999-12-31')
 {% if not loop.last %}union all{% endif %}
 {% endfor %}

@@ -42,11 +42,11 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Code keeps source case; name/description trimmed + spaces collapsed.
-        payment_type_id::bigint                                                          as silver_payment_type_id,
-        nullif(trim(type_code), '')::varchar(20)                                         as silver_type_code,
-        nullif(regexp_replace(trim(type_name),   '\s+', ' ', 'g'), '')::varchar(50)      as silver_type_name,
-        nullif(regexp_replace(trim(description), '\s+', ' ', 'g'), '')::varchar(200)     as silver_type_description,
-        affects_balance_flag::boolean                                                    as silver_affects_balance_flag,
+        cast(payment_type_id as bigint)                                                          as silver_payment_type_id,
+        cast(nullif(trim(type_code), '') as string)                                         as silver_type_code,
+        cast(nullif(regexp_replace(trim(type_name),   '\\s+', ' '), '') as string)      as silver_type_name,
+        cast(nullif(regexp_replace(trim(description), '\\s+', ' '), '') as string)     as silver_type_description,
+        cast(affects_balance_flag as boolean)                                                    as silver_affects_balance_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='payment_type_id') }}
 
@@ -61,15 +61,15 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_payment_type_id::text,
+                cast(silver_payment_type_id as string),
                 coalesce(silver_type_code, ''),
                 coalesce(silver_type_name, ''),
                 coalesce(silver_type_description, ''),
-                coalesce(silver_affects_balance_flag::text, '')
+                coalesce(cast(silver_affects_balance_flag as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

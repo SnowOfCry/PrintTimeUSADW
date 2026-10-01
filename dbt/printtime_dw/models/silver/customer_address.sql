@@ -47,20 +47,20 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Address lines/city: trim + collapse spaces. state_code upper-cased.
-        address_id::bigint                                                               as silver_address_id,
-        customer_id::bigint                                                              as silver_customer_id,
+        cast(address_id as bigint)                                                               as silver_address_id,
+        cast(customer_id as bigint)                                                              as silver_customer_id,
         -- Closed lower-case address-type vocabulary (ADR-005 #4); unmapped -> NULL.
-        case lower(trim(address_type))
+        cast(case lower(trim(address_type))
             when 'billing'  then 'billing'
             when 'shipping' then 'shipping'
             else null
-        end::varchar(20)                                                                 as silver_address_type,
-        nullif(regexp_replace(trim(street_address),  '\s+', ' ', 'g'), '')::varchar(200)  as silver_street_address_line_1,
-        nullif(regexp_replace(trim(street_address2), '\s+', ' ', 'g'), '')::varchar(100)  as silver_street_address_line_2,
-        nullif(regexp_replace(trim(city),            '\s+', ' ', 'g'), '')::varchar(100)  as silver_city,
-        nullif(upper(trim(state_code)), '')::varchar(2)                                  as silver_state_code,
-        nullif(trim(zip_code), '')::varchar(10)                                          as silver_zip_code,
-        is_primary_flag::boolean                                                         as silver_is_primary_flag,
+        end as string)                                                                 as silver_address_type,
+        cast(nullif(regexp_replace(trim(street_address),  '\\s+', ' '), '') as string)  as silver_street_address_line_1,
+        cast(nullif(regexp_replace(trim(street_address2), '\\s+', ' '), '') as string)  as silver_street_address_line_2,
+        cast(nullif(regexp_replace(trim(city),            '\\s+', ' '), '') as string)  as silver_city,
+        cast(nullif(upper(trim(state_code)), '') as string)                                  as silver_state_code,
+        cast(nullif(trim(zip_code), '') as string)                                          as silver_zip_code,
+        cast(is_primary_flag as boolean)                                                         as silver_is_primary_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='address_id') }}
 
@@ -75,19 +75,19 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_address_id::text,
-                coalesce(silver_customer_id::text, ''),
+                cast(silver_address_id as string),
+                coalesce(cast(silver_customer_id as string), ''),
                 coalesce(silver_address_type, ''),
                 coalesce(silver_street_address_line_1, ''),
                 coalesce(silver_street_address_line_2, ''),
                 coalesce(silver_city, ''),
                 coalesce(silver_state_code, ''),
                 coalesce(silver_zip_code, ''),
-                coalesce(silver_is_primary_flag::text, '')
+                coalesce(cast(silver_is_primary_flag as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

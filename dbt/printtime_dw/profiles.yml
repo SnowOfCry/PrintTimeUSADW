@@ -29,3 +29,17 @@ printtime_dw:
       password: "{{ env_var('DBT_PASSWORD') }}"
       threads:  8
       keepalives_idle: 0
+
+    # ── Databricks (Azure migration target) ──────────────────────────────────
+    # Connects to a Databricks SQL Warehouse via the dbt-databricks adapter.
+    # Unity Catalog adds a third namespace level (catalog.schema.table) that the
+    # Postgres outputs above do not have. Secrets come from .env (never committed).
+    #   Run with:  dbt <cmd> --target databricks
+    databricks:
+      type: databricks
+      catalog:   "{{ env_var('DBT_CATALOG', 'printtime_dw') }}"
+      schema:    "{{ env_var('DBT_SCHEMA', 'silver') }}"
+      host:      "{{ env_var('DBRICKS_HOST') }}"
+      http_path: "{{ env_var('DBRICKS_HTTP_PATH') }}"
+      token:     "{{ env_var('DBRICKS_TOKEN') }}"
+      threads:   4

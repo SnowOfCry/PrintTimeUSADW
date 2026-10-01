@@ -49,22 +49,22 @@ cleaned as (
 
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
-        status_history_id::bigint                  as silver_status_history_id,
-        customer_id::bigint                        as silver_customer_id,
+        cast(status_history_id as bigint)                  as silver_status_history_id,
+        cast(customer_id as bigint)                        as silver_customer_id,
         -- Closed lower-case customer-status vocabulary (ADR-005 #4); unmapped -> NULL.
-        case lower(trim(old_status))
+        cast(case lower(trim(old_status))
             when 'active'   then 'active'
             when 'inactive' then 'inactive'
             else null
-        end::varchar(20)                           as silver_old_status,
-        case lower(trim(new_status))
+        end as string)                           as silver_old_status,
+        cast(case lower(trim(new_status))
             when 'active'   then 'active'
             when 'inactive' then 'inactive'
             else null
-        end::varchar(20)                           as silver_new_status,
-        changed_at_source_timestamp::timestamp     as silver_changed_at_timestamp,
-        changed_by::bigint                         as silver_changed_by_employee_id,
-        nullif(regexp_replace(trim(reason), '\s+', ' ', 'g'), '')::varchar(200) as silver_change_reason,
+        end as string)                           as silver_new_status,
+        cast(changed_at_source_timestamp as timestamp)     as silver_changed_at_timestamp,
+        cast(changed_by as bigint)                         as silver_changed_by_employee_id,
+        cast(nullif(regexp_replace(trim(reason), '\\s+', ' '), '') as string) as silver_change_reason,
 
         {{ silver_lineage_and_metadata(source_record_id='status_history_id', source_created_at='changed_at_source_timestamp', source_updated_at='changed_at_source_timestamp') }}
 
@@ -79,17 +79,17 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_status_history_id::text,
-                coalesce(silver_customer_id::text, ''),
+                cast(silver_status_history_id as string),
+                coalesce(cast(silver_customer_id as string), ''),
                 coalesce(silver_old_status, ''),
                 coalesce(silver_new_status, ''),
-                coalesce(silver_changed_at_timestamp::text, ''),
-                coalesce(silver_changed_by_employee_id::text, ''),
+                coalesce(cast(silver_changed_at_timestamp as string), ''),
+                coalesce(cast(silver_changed_by_employee_id as string), ''),
                 coalesce(silver_change_reason, '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

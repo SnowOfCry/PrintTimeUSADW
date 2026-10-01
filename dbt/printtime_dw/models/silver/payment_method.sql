@@ -42,12 +42,12 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Code/type keep source case; name trimmed + internal spaces collapsed.
-        payment_method_id::bigint                                                     as silver_payment_method_id,
-        nullif(trim(method_code), '')::varchar(20)                                    as silver_method_code,
-        nullif(regexp_replace(trim(method_name), '\s+', ' ', 'g'), '')::varchar(50)   as silver_method_name,
-        nullif(trim(method_type), '')::varchar(30)                                    as silver_method_type,
-        is_card_flag::boolean                                                         as silver_is_card_flag,
-        is_active_flag::boolean                                                       as silver_is_active_flag,
+        cast(payment_method_id as bigint)                                                     as silver_payment_method_id,
+        cast(nullif(trim(method_code), '') as string)                                    as silver_method_code,
+        cast(nullif(regexp_replace(trim(method_name), '\\s+', ' '), '') as string)   as silver_method_name,
+        cast(nullif(trim(method_type), '') as string)                                    as silver_method_type,
+        cast(is_card_flag as boolean)                                                         as silver_is_card_flag,
+        cast(is_active_flag as boolean)                                                       as silver_is_active_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='payment_method_id') }}
 
@@ -62,16 +62,16 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_payment_method_id::text,
+                cast(silver_payment_method_id as string),
                 coalesce(silver_method_code, ''),
                 coalesce(silver_method_name, ''),
                 coalesce(silver_method_type, ''),
-                coalesce(silver_is_card_flag::text, ''),
-                coalesce(silver_is_active_flag::text, '')
+                coalesce(cast(silver_is_card_flag as string), ''),
+                coalesce(cast(silver_is_active_flag as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

@@ -45,12 +45,12 @@ deduped as (
 cleaned as (
     select
         -- ── business columns ────────────────────────────────────────────────
-        category_id::bigint                                                          as silver_category_id,
-        department_id::bigint                                                        as silver_department_id,
-        nullif(trim(category_code), '')::varchar(40)                                 as silver_category_code,
-        nullif(regexp_replace(trim(category_name), '\s+', ' ', 'g'), '')::varchar(100)  as silver_category_name,
-        nullif(regexp_replace(trim(description),   '\s+', ' ', 'g'), '')::varchar(200)  as silver_category_description,
-        is_active_flag::boolean                                                      as silver_is_active_flag,
+        cast(category_id as bigint)                                                          as silver_category_id,
+        cast(department_id as bigint)                                                        as silver_department_id,
+        cast(nullif(trim(category_code), '') as string)                                 as silver_category_code,
+        cast(nullif(regexp_replace(trim(category_name), '\\s+', ' '), '') as string)  as silver_category_name,
+        cast(nullif(regexp_replace(trim(description),   '\\s+', ' '), '') as string)  as silver_category_description,
+        cast(is_active_flag as boolean)                                                      as silver_is_active_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='category_id') }}
 
@@ -62,14 +62,14 @@ cleaned as (
 --    (metadata excluded, so lineage/timestamps never look like a change).
 final as (
     select *,
-        md5(concat_ws('|',
-            silver_category_id::text,
-            coalesce(silver_department_id::text, ''),
+        cast(md5(concat_ws('|',
+            cast(silver_category_id as string),
+            coalesce(cast(silver_department_id as string), ''),
             coalesce(silver_category_code, ''),
             coalesce(silver_category_name, ''),
             coalesce(silver_category_description, ''),
-            coalesce(silver_is_active_flag::text, '')
-        ))::text as silver_row_hash
+            coalesce(cast(silver_is_active_flag as string), '')
+        )) as string) as silver_row_hash
     from cleaned
 )
 

@@ -41,11 +41,11 @@ select
     f.customer_status,
 
     -- deterministic row-level derivations
-    (sd.date - ld.date)                                         as days_since_last_order,
+    datediff(sd.date, ld.date)                                         as days_since_last_order,
     case
         when f.is_active_customer
          and f.orders_last_30_days = 0
-         and (sd.date - ld.date) > {{ at_risk_days }}
+         and datediff(sd.date, ld.date) > {{ at_risk_days }}
         then true else false
     end                                                         as is_at_risk
 from {{ ref('fact_customer_behavior_snapshot') }} f

@@ -46,13 +46,13 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Type kept in source case; reason trimmed + internal spaces collapsed.
-        adjustment_id::bigint                                                          as silver_adjustment_id,
-        invoice_id::bigint                                                             as silver_invoice_id,
-        nullif(trim(adjustment_type), '')::varchar(20)                                 as silver_adjustment_type,
-        amount::numeric(18,2)                                                          as silver_adjustment_amount,
-        nullif(regexp_replace(trim(reason), '\s+', ' ', 'g'), '')::varchar(200)        as silver_adjustment_reason,
-        adjusted_by::bigint                                                            as silver_adjusted_by_employee_id,
-        adjustment_date::date                                                          as silver_adjustment_date,
+        cast(adjustment_id as bigint)                                                          as silver_adjustment_id,
+        cast(invoice_id as bigint)                                                             as silver_invoice_id,
+        cast(nullif(trim(adjustment_type), '') as string)                                 as silver_adjustment_type,
+        cast(amount as decimal(18,2))                                                          as silver_adjustment_amount,
+        cast(nullif(regexp_replace(trim(reason), '\\s+', ' '), '') as string)        as silver_adjustment_reason,
+        cast(adjusted_by as bigint)                                                            as silver_adjusted_by_employee_id,
+        cast(adjustment_date as date)                                                          as silver_adjustment_date,
 
         {{ silver_lineage_and_metadata(source_record_id='adjustment_id') }}
 
@@ -67,17 +67,17 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_adjustment_id::text,
-                coalesce(silver_invoice_id::text, ''),
+                cast(silver_adjustment_id as string),
+                coalesce(cast(silver_invoice_id as string), ''),
                 coalesce(silver_adjustment_type, ''),
-                coalesce(silver_adjustment_amount::text, ''),
+                coalesce(cast(silver_adjustment_amount as string), ''),
                 coalesce(silver_adjustment_reason, ''),
-                coalesce(silver_adjusted_by_employee_id::text, ''),
-                coalesce(silver_adjustment_date::text, '')
+                coalesce(cast(silver_adjusted_by_employee_id as string), ''),
+                coalesce(cast(silver_adjustment_date as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

@@ -5,12 +5,13 @@ with bounds as (
     from {{ ref('econ_indicator') }} group by 1
 ),
 expected as (
-    select b.silver_series_id, gs::date as month
-    from bounds b, generate_series(b.lo, b.hi, interval '1 month') gs
+    select b.silver_series_id, cast(gs as date) as month
+    from bounds b
+    lateral view explode(sequence(b.lo, b.hi, interval 1 month)) as gs
 )
 select e.silver_series_id, e.month
 from expected e
 left join {{ ref('econ_indicator') }} s
     on s.silver_series_id = e.silver_series_id
-   and date_trunc('month', s.silver_observation_date) = date_trunc('month', e.month)
+   and trunc(s.silver_observation_date, 'MM') = trunc(e.month, 'MM')
 where s.silver_series_id is null

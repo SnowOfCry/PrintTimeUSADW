@@ -44,13 +44,13 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Code keeps source case; description trimmed + spaces collapsed.
-        tax_rate_id::bigint                                                          as silver_tax_rate_id,
-        nullif(trim(tax_code), '')::varchar(20)                                      as silver_tax_code,
-        nullif(regexp_replace(trim(description), '\s+', ' ', 'g'), '')::varchar(100) as silver_tax_description,
-        rate_pct::numeric(6,4)                                                       as silver_rate_pct,
-        effective_from::date                                                         as silver_effective_from_date,
-        effective_to::date                                                           as silver_effective_to_date,
-        is_active_flag::boolean                                                      as silver_is_active_flag,
+        cast(tax_rate_id as bigint)                                                          as silver_tax_rate_id,
+        cast(nullif(trim(tax_code), '') as string)                                      as silver_tax_code,
+        cast(nullif(regexp_replace(trim(description), '\\s+', ' '), '') as string) as silver_tax_description,
+        cast(rate_pct as decimal(6,4))                                                       as silver_rate_pct,
+        cast(effective_from as date)                                                         as silver_effective_from_date,
+        cast(effective_to as date)                                                           as silver_effective_to_date,
+        cast(is_active_flag as boolean)                                                      as silver_is_active_flag,
 
         {{ silver_lineage_and_metadata(source_record_id='tax_rate_id') }}
 
@@ -65,17 +65,17 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_tax_rate_id::text,
+                cast(silver_tax_rate_id as string),
                 coalesce(silver_tax_code, ''),
                 coalesce(silver_tax_description, ''),
-                coalesce(silver_rate_pct::text, ''),
-                coalesce(silver_effective_from_date::text, ''),
-                coalesce(silver_effective_to_date::text, ''),
-                coalesce(silver_is_active_flag::text, '')
+                coalesce(cast(silver_rate_pct as string), ''),
+                coalesce(cast(silver_effective_from_date as string), ''),
+                coalesce(cast(silver_effective_to_date as string), ''),
+                coalesce(cast(silver_is_active_flag as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

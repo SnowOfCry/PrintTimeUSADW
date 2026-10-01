@@ -13,15 +13,15 @@
 {{ config(materialized='view', tags=['gold', 'bi', 'pii-masked']) }}
 
 select
-    silver_customer_account_no::varchar(30)                 as customer_id,
-    silver_customer_name::varchar(100)                      as customer_name,
-    case
+    cast(silver_customer_account_no as string)                 as customer_id,
+    cast(silver_customer_name as string)                      as customer_name,
+    cast(case
         when silver_email is null or silver_email = '' then null
         else left(silver_email, 1) || '***@' || split_part(silver_email, '@', 2)
-    end::varchar(120)                                       as email_masked,
-    case
+    end as string)                                       as email_masked,
+    cast(case
         when silver_phone_number is null then null
-        else '***-***-' || right(regexp_replace(silver_phone_number, '\D', '', 'g'), 4)
-    end::varchar(20)                                        as phone_masked
+        else '***-***-' || right(regexp_replace(silver_phone_number, '\\D', ''), 4)
+    end as string)                                        as phone_masked
 from {{ ref('customer') }}
 where silver_is_deleted_flag = false

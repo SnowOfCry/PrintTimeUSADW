@@ -42,12 +42,12 @@ cleaned as (
 
     select
         -- ── business columns (cleaned + cast to spec types) ─────────────────
-        upper(trim(series_id))::varchar(50)        as silver_series_id,
-        observation_date::date                     as silver_observation_date,
-        indicator_value::numeric(18,6)             as silver_indicator_value,
-        nullif(trim(units), '')::varchar(50)       as silver_units,
+        cast(upper(trim(series_id)) as string)        as silver_series_id,
+        cast(observation_date as date)                     as silver_observation_date,
+        cast(indicator_value as decimal(18,6))             as silver_indicator_value,
+        cast(nullif(trim(units), '') as string)       as silver_units,
 
-        {{ silver_lineage_and_metadata(source_record_id="series_id || '-' || observation_date::text") }}
+        {{ silver_lineage_and_metadata(source_record_id="series_id || '-' || cast(observation_date as string)") }}
 
     from deduped
     where rn = 1
@@ -57,14 +57,14 @@ cleaned as (
 final as (
     select
         *,
-        md5(
+        cast(md5(
             concat_ws('|',
                 silver_series_id,
-                silver_observation_date::text,
-                coalesce(silver_indicator_value::text, ''),
+                cast(silver_observation_date as string),
+                coalesce(cast(silver_indicator_value as string), ''),
                 coalesce(silver_units, '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

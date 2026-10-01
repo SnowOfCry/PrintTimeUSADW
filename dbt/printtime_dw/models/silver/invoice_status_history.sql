@@ -49,26 +49,26 @@ cleaned as (
 
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
-        status_history_id::bigint                  as silver_status_history_id,
-        invoice_id::bigint                         as silver_invoice_id,
+        cast(status_history_id as bigint)                  as silver_status_history_id,
+        cast(invoice_id as bigint)                         as silver_invoice_id,
         -- Closed lower-case invoice-status vocabulary (ADR-005 #4); unmapped -> NULL.
-        case lower(trim(old_status))
+        cast(case lower(trim(old_status))
             when 'open'    then 'open'
             when 'partial' then 'partial'
             when 'paid'    then 'paid'
             when 'void'    then 'void'
             else null
-        end::varchar(20)                           as silver_old_status,
-        case lower(trim(new_status))
+        end as string)                           as silver_old_status,
+        cast(case lower(trim(new_status))
             when 'open'    then 'open'
             when 'partial' then 'partial'
             when 'paid'    then 'paid'
             when 'void'    then 'void'
             else null
-        end::varchar(20)                           as silver_new_status,
-        changed_at_source_timestamp::timestamp     as silver_changed_at_timestamp,
-        changed_by::bigint                         as silver_changed_by_employee_id,
-        nullif(regexp_replace(trim(note), '\s+', ' ', 'g'), '')::varchar(200) as silver_change_note,
+        end as string)                           as silver_new_status,
+        cast(changed_at_source_timestamp as timestamp)     as silver_changed_at_timestamp,
+        cast(changed_by as bigint)                         as silver_changed_by_employee_id,
+        cast(nullif(regexp_replace(trim(note), '\\s+', ' '), '') as string) as silver_change_note,
 
         {{ silver_lineage_and_metadata(source_record_id='status_history_id', source_created_at='changed_at_source_timestamp', source_updated_at='changed_at_source_timestamp') }}
 
@@ -83,17 +83,17 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_status_history_id::text,
-                coalesce(silver_invoice_id::text, ''),
+                cast(silver_status_history_id as string),
+                coalesce(cast(silver_invoice_id as string), ''),
                 coalesce(silver_old_status, ''),
                 coalesce(silver_new_status, ''),
-                coalesce(silver_changed_at_timestamp::text, ''),
-                coalesce(silver_changed_by_employee_id::text, ''),
+                coalesce(cast(silver_changed_at_timestamp as string), ''),
+                coalesce(cast(silver_changed_by_employee_id as string), ''),
                 coalesce(silver_change_note, '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

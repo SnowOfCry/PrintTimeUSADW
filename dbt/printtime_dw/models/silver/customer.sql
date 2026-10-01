@@ -49,32 +49,32 @@ deduped as(
     from source
 ),
 cleaned as(
-    select 
-        customer_id::bigint as silver_customer_id,
-        nullif(trim(customer_account_no),'')::varchar(30)  as silver_customer_account_no,
-        nullif(regexp_replace(trim(business_name), '\s+', ' ', 'g'), '')::varchar(255)  as silver_business_name,
-        initcap(nullif(regexp_replace(trim(first_name), '\s+', ' ', 'g'), ''))::varchar(100) as silver_first_name,
-        initcap(nullif(regexp_replace(trim(last_name), '\s+', ' ', 'g'), ''))::varchar(100) as silver_last_name,
-        case
-            when nullif(regexp_replace(trim(business_name), '\s+', ' ', 'g'), '') is not null
-            then nullif(regexp_replace(trim(business_name), '\s+', ' ', 'g'), '')
+    select
+        cast(customer_id as bigint) as silver_customer_id,
+        cast(nullif(trim(customer_account_no),'') as string)  as silver_customer_account_no,
+        cast(nullif(regexp_replace(trim(business_name), '\\s+', ' '), '') as string)  as silver_business_name,
+        cast(initcap(nullif(regexp_replace(trim(first_name), '\\s+', ' '), '')) as string) as silver_first_name,
+        cast(initcap(nullif(regexp_replace(trim(last_name), '\\s+', ' '), '')) as string) as silver_last_name,
+        cast(case
+            when nullif(regexp_replace(trim(business_name), '\\s+', ' '), '') is not null
+            then nullif(regexp_replace(trim(business_name), '\\s+', ' '), '')
             else initcap(
              nullif(regexp_replace(
                  trim(concat_ws(' ', first_name, last_name)),
-             '\s+', ' ', 'g'), '')
+             '\\s+', ' '), '')
          )
-        end::varchar(255) as silver_customer_name,
-        nullif(trim(lower(email)),'')::varchar(255) as silver_email,
-        nullif(regexp_replace(phone, '[^0-9]', '', 'g'), '')::varchar(50) as silver_phone_number,
-        case lower(trim(customer_status))
+        end as string) as silver_customer_name,
+        cast(nullif(trim(lower(email)),'') as string) as silver_email,
+        cast(nullif(regexp_replace(phone, '[^0-9]', ''), '') as string) as silver_phone_number,
+        cast(case lower(trim(customer_status))
             when 'active'   then 'active'
             when 'inactive' then 'inactive'
-        else null                      
-        end::varchar(20) as silver_customer_status,
-        (lower(trim(customer_status)) = 'active')::boolean as silver_is_active_flag,
-        default_tax_rate_id::bigint as silver_default_tax_rate_id,
-        home_store_id::bigint as silver_home_store_id,
-        first_order_date::date as silver_first_order_date, 
+        else null
+        end as string) as silver_customer_status,
+        cast(lower(trim(customer_status)) = 'active' as boolean) as silver_is_active_flag,
+        cast(default_tax_rate_id as bigint) as silver_default_tax_rate_id,
+        cast(home_store_id as bigint) as silver_home_store_id,
+        cast(first_order_date as date) as silver_first_order_date,
 
         {{ silver_lineage_and_metadata(source_record_id='customer_id') }}
 
@@ -83,8 +83,8 @@ cleaned as(
 ),
 final as (
     select *,
-        md5(concat_ws('|',
-            silver_customer_id::text,
+        cast(md5(concat_ws('|',
+            cast(silver_customer_id as string),
             coalesce(silver_customer_account_no, ''),
             coalesce(silver_business_name, ''),
             coalesce(silver_first_name, ''),
@@ -93,11 +93,11 @@ final as (
             coalesce(silver_email, ''),
             coalesce(silver_phone_number, ''),
             coalesce(silver_customer_status, ''),
-            coalesce(silver_is_active_flag::text, ''),
-            coalesce(silver_default_tax_rate_id::text, ''),
-            coalesce(silver_home_store_id::text, ''),
-            coalesce(silver_first_order_date::text, '')
-        ))::text as silver_row_hash
+            coalesce(cast(silver_is_active_flag as string), ''),
+            coalesce(cast(silver_default_tax_rate_id as string), ''),
+            coalesce(cast(silver_home_store_id as string), ''),
+            coalesce(cast(silver_first_order_date as string), '')
+        )) as string) as silver_row_hash
     from cleaned
 )
 

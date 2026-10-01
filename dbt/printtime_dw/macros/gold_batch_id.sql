@@ -36,7 +36,7 @@
   Loud on run/build if the map is absent (MED-12) — no silent '-1' in persisted
   gold rows; '-1' is emitted only for compile/parse/docs, which persist nothing.
 
-  Emits a bare token; the model quotes it:  '{{ gold_batch_id() }}'::varchar(50)
+  Emits a bare token; the model quotes it:  cast('{{ gold_batch_id() }}' as string)
 -#}
 {%- set ids = var('gold_batch_ids', none) -%}
 {%- if ids is none and execute and flags.WHICH in ['run', 'build'] -%}

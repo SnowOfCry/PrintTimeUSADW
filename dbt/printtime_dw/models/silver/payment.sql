@@ -46,30 +46,30 @@ cleaned as (
 
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
-        payment_id::bigint                         as silver_payment_id,
-        invoice_id::bigint                         as silver_invoice_id,
-        customer_id::bigint                        as silver_customer_id,
-        payment_method_id::bigint                  as silver_payment_method_id,
-        payment_type_id::bigint                    as silver_payment_type_id,
-        employee_id::bigint                        as silver_employee_id,
-        store_id::bigint                           as silver_store_id,
-        parent_payment_id::bigint                  as silver_parent_payment_id,
-        payment_sequence_num::smallint             as silver_payment_sequence_num,
+        cast(payment_id as bigint)                         as silver_payment_id,
+        cast(invoice_id as bigint)                         as silver_invoice_id,
+        cast(customer_id as bigint)                        as silver_customer_id,
+        cast(payment_method_id as bigint)                  as silver_payment_method_id,
+        cast(payment_type_id as bigint)                    as silver_payment_type_id,
+        cast(employee_id as bigint)                        as silver_employee_id,
+        cast(store_id as bigint)                           as silver_store_id,
+        cast(parent_payment_id as bigint)                  as silver_parent_payment_id,
+        cast(payment_sequence_num as smallint)             as silver_payment_sequence_num,
         -- Closed lower-case status vocabulary (ADR-005 #4); unmapped -> NULL (DQ signal).
-        case lower(trim(payment_status))
+        cast(case lower(trim(payment_status))
             when 'pending'  then 'pending'
             when 'cleared'  then 'cleared'
             when 'failed'   then 'failed'
             when 'refunded' then 'refunded'
             when 'void'     then 'void'
             else null
-        end::varchar(20)                           as silver_payment_status,
-        payment_date::date                         as silver_payment_date,
-        gross_amount::numeric(18,2)                as silver_payment_amount,   -- renamed from gross_amount
-        tax_amount::numeric(18,2)                  as silver_tax_amount,
-        fee_amount::numeric(18,2)                  as silver_fee_amount,
-        net_amount::numeric(18,2)                  as silver_net_amount,
-        nullif(trim(reference_no), '')::varchar(60) as silver_reference_no,
+        end as string)                           as silver_payment_status,
+        cast(payment_date as date)                         as silver_payment_date,
+        cast(gross_amount as decimal(18,2))                as silver_payment_amount,   -- renamed from gross_amount
+        cast(tax_amount as decimal(18,2))                  as silver_tax_amount,
+        cast(fee_amount as decimal(18,2))                  as silver_fee_amount,
+        cast(net_amount as decimal(18,2))                  as silver_net_amount,
+        cast(nullif(trim(reference_no), '') as string) as silver_reference_no,
 
         {{ silver_lineage_and_metadata(source_record_id='payment_id') }}
 
@@ -84,26 +84,26 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_payment_id::text,
-                coalesce(silver_invoice_id::text, ''),
-                coalesce(silver_customer_id::text, ''),
-                coalesce(silver_payment_method_id::text, ''),
-                coalesce(silver_payment_type_id::text, ''),
-                coalesce(silver_employee_id::text, ''),
-                coalesce(silver_store_id::text, ''),
-                coalesce(silver_parent_payment_id::text, ''),
-                coalesce(silver_payment_sequence_num::text, ''),
+                cast(silver_payment_id as string),
+                coalesce(cast(silver_invoice_id as string), ''),
+                coalesce(cast(silver_customer_id as string), ''),
+                coalesce(cast(silver_payment_method_id as string), ''),
+                coalesce(cast(silver_payment_type_id as string), ''),
+                coalesce(cast(silver_employee_id as string), ''),
+                coalesce(cast(silver_store_id as string), ''),
+                coalesce(cast(silver_parent_payment_id as string), ''),
+                coalesce(cast(silver_payment_sequence_num as string), ''),
                 coalesce(silver_payment_status, ''),
-                coalesce(silver_payment_date::text, ''),
-                coalesce(silver_payment_amount::text, ''),
-                coalesce(silver_tax_amount::text, ''),
-                coalesce(silver_fee_amount::text, ''),
-                coalesce(silver_net_amount::text, ''),
+                coalesce(cast(silver_payment_date as string), ''),
+                coalesce(cast(silver_payment_amount as string), ''),
+                coalesce(cast(silver_tax_amount as string), ''),
+                coalesce(cast(silver_fee_amount as string), ''),
+                coalesce(cast(silver_net_amount as string), ''),
                 coalesce(silver_reference_no, '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

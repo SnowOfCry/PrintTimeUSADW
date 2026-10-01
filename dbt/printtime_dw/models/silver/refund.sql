@@ -44,13 +44,13 @@ cleaned as (
     select
         -- ── business columns (cleaned + cast to the DDL types) ──────────────
         -- Reason: trim + collapse internal spaces, preserve case.
-        refund_id::bigint                                                             as silver_refund_id,
-        payment_id::bigint                                                            as silver_payment_id,
-        invoice_id::bigint                                                            as silver_invoice_id,
-        refund_amount::numeric(18,2)                                                  as silver_refund_amount,
-        refund_date::date                                                             as silver_refund_date,
-        nullif(regexp_replace(trim(reason), '\s+', ' ', 'g'), '')::varchar(200)       as silver_refund_reason,
-        refunded_by::bigint                                                           as silver_refunded_by_employee_id,
+        cast(refund_id as bigint)                                                             as silver_refund_id,
+        cast(payment_id as bigint)                                                            as silver_payment_id,
+        cast(invoice_id as bigint)                                                            as silver_invoice_id,
+        cast(refund_amount as decimal(18,2))                                                  as silver_refund_amount,
+        cast(refund_date as date)                                                             as silver_refund_date,
+        cast(nullif(regexp_replace(trim(reason), '\\s+', ' '), '') as string)       as silver_refund_reason,
+        cast(refunded_by as bigint)                                                           as silver_refunded_by_employee_id,
 
         {{ silver_lineage_and_metadata(source_record_id='refund_id') }}
 
@@ -65,17 +65,17 @@ final as (
         -- ── change-detection hash over the STANDARDIZED business columns only ──
         -- (metadata is excluded so lineage/timestamps never look like a change;
         --  coalesce guards against concat_ws silently dropping NULLs)
-        md5(
+        cast(md5(
             concat_ws('|',
-                silver_refund_id::text,
-                coalesce(silver_payment_id::text, ''),
-                coalesce(silver_invoice_id::text, ''),
-                coalesce(silver_refund_amount::text, ''),
-                coalesce(silver_refund_date::text, ''),
+                cast(silver_refund_id as string),
+                coalesce(cast(silver_payment_id as string), ''),
+                coalesce(cast(silver_invoice_id as string), ''),
+                coalesce(cast(silver_refund_amount as string), ''),
+                coalesce(cast(silver_refund_date as string), ''),
                 coalesce(silver_refund_reason, ''),
-                coalesce(silver_refunded_by_employee_id::text, '')
+                coalesce(cast(silver_refunded_by_employee_id as string), '')
             )
-        )::text as silver_row_hash
+        ) as string) as silver_row_hash
     from cleaned
 )
 

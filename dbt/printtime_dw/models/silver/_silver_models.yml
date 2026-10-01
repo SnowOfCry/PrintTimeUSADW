@@ -49,7 +49,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -84,7 +84,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -111,7 +111,7 @@ models:
         data_type: varchar(255)
 
       - name: silver_product_description
-        data_type: text
+        data_type: string
 
       - name: silver_department_id
         data_type: bigint
@@ -154,7 +154,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -189,7 +189,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -267,7 +267,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -302,7 +302,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -343,7 +343,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -378,7 +378,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -426,7 +426,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -461,7 +461,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -524,7 +524,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -559,7 +559,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -625,7 +625,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -660,7 +660,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -704,7 +704,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -739,7 +739,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -780,7 +780,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -815,7 +815,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -862,7 +862,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -897,7 +897,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -941,7 +941,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -976,7 +976,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1015,7 +1015,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1050,7 +1050,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1148,7 +1148,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1183,7 +1183,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1253,7 +1253,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1288,7 +1288,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1343,7 +1343,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1378,7 +1378,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1429,7 +1429,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1464,7 +1464,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1529,7 +1529,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1564,7 +1564,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1625,7 +1625,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1660,7 +1660,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1726,7 +1726,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1761,7 +1761,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1876,7 +1876,7 @@ models:
         data_type: varchar(150)
 
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
 
       - name: silver_source_created_at_timestamp
         data_type: timestamp
@@ -1911,7 +1911,7 @@ models:
           - type: not_null
 
       - name: silver_row_hash
-        data_type: text
+        data_type: string
         constraints:
           - type: not_null
 
@@ -1942,7 +1942,7 @@ models:
       - name: silver_source_table_name
         data_type: varchar(150)
       - name: silver_source_record_id
-        data_type: text
+        data_type: string
       - name: silver_source_created_at_timestamp
         data_type: timestamp
       - name: silver_source_updated_at_timestamp
@@ -1968,4 +1968,4 @@ models:
         constraints:
           - type: not_null
       - name: silver_row_hash
-        data_type: text
+        data_type: string

@@ -395,6 +395,31 @@ itself is code-reviewed and reproducible.
 
 ---
 
+## Part 8 — Version the Workflow as a Databricks Asset Bundle (IaC)
+
+Turned the click-ops Workflow into version-controlled infrastructure-as-code so the
+job is reviewed in Git and deployed reproducibly.
+
+- **What:** A Databricks Asset Bundle (DAB) — `databricks.yml` (bundle name, vars,
+  dev/prod targets) + `resources/printtime_elt_job.yml` (the dbt job: git source,
+  the silver→gold→test task, schedule, failure email).
+- **Why:** The Workflow otherwise lives only in the workspace UI. As a bundle it's
+  code — diffable, reviewable, promotable dev→prod, rebuildable if the workspace is lost.
+- **How to use it** (needs the Databricks CLI — `winget install Databricks.DatabricksCLI`):
+  ```bash
+  # fill warehouse_id, host, alert_email in databricks.yml, then:
+  databricks bundle validate                 # check YAML against the Jobs API
+  databricks bundle deploy -t dev            # create/update the job
+  databricks bundle run printtime_elt_databricks -t dev
+  ```
+- **Exact export alternative:** `databricks bundle generate job --existing-job-id <JOB_ID>`
+  pulls the *live* job's YAML (captures the serverless `environments` spec, which is
+  the one block most likely to need a tweak in the hand-authored version).
+- **Status:** YAML authored + syntax-validated and committed. Deploy/validate against a
+  workspace is pending the CLI (and filling the 3 placeholders).
+
+---
+
 ## Where we are
 
 - [x] Repo synced to GitHub, migration branch created
@@ -408,6 +433,8 @@ itself is code-reviewed and reproducible.
 - [x] **Unity Catalog governance: 3 groups + grants; PII guarantee verified (bi_reader has no silver access)** ✅
 - [x] **Databricks Workflow: dbt runs in Databricks on a schedule (silver→gold→test), 182/182 green, alerts on failure** ✅
 - [x] **Audit change-trail macro (M8) ported to Databricks — audit.audit_log written on fact reloads; jsonb/temp-table logic → to_json/struct + map_filter** ✅
+- [x] **CI migrated to the Databricks target (`dbt parse`, secret-free)** ✅
+- [x] **Workflow versioned as a Databricks Asset Bundle (`databricks.yml` + `resources/`)** ✅
 - [ ] Paid workspace + ADLS Gen2 (leave Free Edition) · rotate the PAT
 - [ ] Unity Catalog grants + a Databricks Workflow
 - [ ] Decide → paid Azure workspace + ADLS Gen2

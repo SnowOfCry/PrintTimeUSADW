@@ -1,0 +1,48 @@
+# =============================================================================
+# databricks.yml — Databricks Asset Bundle (DAB) for PrintTimeUSA
+# -----------------------------------------------------------------------------
+# Versions the Databricks Workflow (the dbt orchestration job) as code, so the
+# job is reviewed in Git and deployed reproducibly — instead of living only as
+# click-ops in the workspace UI.
+#
+# Prereqs: Databricks CLI v0.218+  (https://docs.databricks.com/dev-tools/cli)
+#   winget install Databricks.DatabricksCLI    # or the official install script
+#
+# Fill the three vars below (warehouse_id, host, alert_email), then:
+#   databricks bundle validate                 # check the YAML against the API
+#   databricks bundle deploy  -t dev           # create/update the job in the workspace
+#   databricks bundle run printtime_elt_databricks -t dev   # trigger a run
+#
+# To capture the EXACT live job instead of this hand-authored version:
+#   databricks bundle generate job --existing-job-id <JOB_ID>
+#   (JOB_ID is the number in the job's URL: /jobs/<JOB_ID>)
+# =============================================================================
+
+bundle:
+  name: printtime_dw
+
+variables:
+  warehouse_id:
+    description: "SQL warehouse ID the dbt task runs against (SQL Warehouses → your warehouse → ...  the id in its URL / Connection details)."
+    default: "REPLACE_WITH_WAREHOUSE_ID"
+  alert_email:
+    description: "Email notified on job failure."
+    default: "REPLACE_WITH_EMAIL"
+
+include:
+  - resources/*.yml
+
+targets:
+  # Development target: deploys the job under your user, schedule paused.
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: "https://REPLACE_WITH_WORKSPACE_HOST"   # e.g. https://dbc-xxxx.cloud.databricks.com
+
+  # Production target: deploy with `-t prod`. mode: production enforces a clean,
+  # non-personal deployment (no "[dev you]" prefixes, no paused-by-default dev tweaks).
+  prod:
+    mode: production
+    workspace:
+      host: "https://REPLACE_WITH_WORKSPACE_HOST"

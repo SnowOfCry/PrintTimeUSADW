@@ -18,6 +18,40 @@ in Docker.
 
 ---
 
+## ☁️ Migrated to Azure Databricks
+
+This warehouse has been **migrated end-to-end from local PostgreSQL to Azure Databricks**
+(Unity Catalog + Delta Lake), proven on Databricks Free Edition. **dbt was kept as the
+transformation layer** — only the SQL dialect and the adapter changed, preserving every model,
+test, snapshot, and contract.
+
+| Layer | Local (original) | Azure Databricks |
+|---|---|---|
+| Storage & compute | PostgreSQL 16 | ADLS Gen2 + Delta Lake (Unity Catalog) |
+| Transformation | dbt-postgres | dbt-databricks (SQL Warehouse) |
+| Orchestration | Apache Airflow (Docker) | Databricks Workflows (scheduled + alerts) |
+| Governance | PostgreSQL roles | Unity Catalog grants (deny-by-default, PII-safe) |
+| Packaging / IaC | Docker Compose | Databricks Asset Bundle (`databricks.yml`) |
+
+**Verified on Databricks:** `dbt build` **49/49 models** · `dbt test` **182/182 passing** ·
+gold reconciles to silver **to the cent** · Unity Catalog PII guarantee (`pt_bi_reader` has
+no access to `silver`) · scheduled Workflow with failure alerts.
+
+**Where it lives:** the ported SQL dialect across all models/macros/tests, plus
+`sql/databricks_poc/` (bronze + audit DDL), `scripts/databricks_poc/` (synthetic data
+generator + helpers), `sql/security/002_unity_catalog_grants.sql`, `databricks.yml` +
+`resources/` (the job as code), and a Databricks-target CI job (`dbt parse`).
+
+📖 **Full step-by-step guide + troubleshooting log:**
+[`docs/migration/`](docs/migration/) —
+[migration guide](docs/migration/MIGRATION_TO_DATABRICKS_GUIDE.md) ·
+[error & fix log](docs/migration/ERROR_AND_FIX_LOG.md)
+
+> The sections below document the **original local PostgreSQL implementation**, which remains
+> fully runnable in Docker. The Databricks port keeps the same medallion model and dbt project.
+
+---
+
 ## Highlights
 
 - **Medallion architecture** (bronze → silver → gold) with an `audit` schema for ETL batch
@@ -55,6 +89,10 @@ in Docker.
 | Security | Least-privilege PostgreSQL roles — `pt_ingestion` / `pt_dbt` / `pt_bi_reader` (ADR-019) |
 | Code quality | ruff, mypy, pytest + 195 dbt data tests (CI on every push) |
 | Runtime | Docker + Docker Compose |
+
+> ☁️ The warehouse now also runs on **Azure Databricks** (Unity Catalog + Delta Lake,
+> dbt-databricks, Databricks Workflows) — see [Migrated to Azure Databricks](#️-migrated-to-azure-databricks)
+> above and [`docs/migration/`](docs/migration/).
 
 ---
 
